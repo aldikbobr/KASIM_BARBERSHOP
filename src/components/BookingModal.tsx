@@ -16,6 +16,8 @@ const TIME_SLOTS = [
 ];
 
 const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+// MONTHS — для шапки календаря («Сентябрь 2026»), MONTHS_OF — для даты («21 сентября»)
+const MONTHS_OF = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
 export default function BookingModal({ open, onClose }: BookingModalProps) {
@@ -98,7 +100,7 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
   };
 
   const formatDate = (d: Date) => {
-    return `${d.getDate()} ${MONTHS[d.getMonth()].toLowerCase()}`;
+    return `${d.getDate()} ${MONTHS_OF[d.getMonth()]}`;
   };
 
   // Заявка уходит в WhatsApp того филиала, который выбрал клиент
