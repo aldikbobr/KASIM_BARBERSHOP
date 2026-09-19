@@ -162,7 +162,7 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[var(--border)] px-6 py-4">
           <h2 className="font-display text-lg font-medium tracking-[0.06em] uppercase">
-            {success ? 'Готово' : 'Запись'}
+            {success ? 'Подтверждение' : 'Запись'}
           </h2>
           <button
             onClick={onClose}
@@ -176,12 +176,13 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
         {success ? (
           <div className="flex flex-col items-center gap-4 px-6 py-16 text-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--gold)]/10">
-              <Check size={32} className="text-[var(--gold)]" />
+              <MessageCircle size={32} className="text-[var(--gold)]" />
             </div>
-            <h3 className="font-display text-2xl font-medium uppercase">Заявка отправлена</h3>
+            <h3 className="font-display text-2xl font-medium uppercase">Подтвердите запись</h3>
             <p className="max-w-sm text-[15px] leading-relaxed text-[var(--muted)]">
-              Отправьте заявку нам в WhatsApp — так подтвердим быстрее. Не хотите писать —
-              ничего страшного: заявка уже у нас, мы перезвоним.
+              Нажмите кнопку — откроется WhatsApp филиала с готовым текстом, останется
+              отправить. Не отправите — ничего страшного: заявку мы уже получили
+              и перезвоним сами.
             </p>
             <div className="mt-2 rounded-xl border border-[var(--border)] bg-black/30 px-5 py-4 text-left text-sm">
               <div className="flex gap-2"><span className="text-[var(--muted)]">Мастер:</span><span className="text-white">{barber}</span></div>
@@ -191,7 +192,7 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
             </div>
             {wa && (
               <a href={wa} target="_blank" rel="noopener" className="btn btn-gold mt-4">
-                <MessageCircle size={16} /> Отправить в WhatsApp
+                <MessageCircle size={16} /> Подтвердить в WhatsApp
               </a>
             )}
             <button onClick={onClose} className="btn btn-ghost">Закрыть</button>
