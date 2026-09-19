@@ -45,7 +45,7 @@ export default function Hero({ onBooking }: HeroProps) {
             <p className="eyebrow">Барбершоп №1 · Петропавловск</p>
           </div>
 
-          <h1 className="font-display text-[clamp(52px,11vw,140px)] leading-[0.95] font-medium tracking-[0.01em] uppercase">
+          <h1 className="font-display text-[clamp(52px,13.5vw,200px)] leading-[0.95] font-medium tracking-[0.01em] uppercase">
             {splitTitle('KASYM')}
           </h1>
 
