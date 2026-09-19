@@ -1,0 +1,72 @@
+interface HeroProps {
+  onBooking: () => void;
+}
+
+export default function Hero({ onBooking }: HeroProps) {
+  const splitTitle = (text: string) =>
+    text.split('').map((char, i) => (
+      <span
+        key={`${char}-${i}`}
+        className="char-in"
+        style={{ animationDelay: `${i * 0.06}s` }}
+      >
+        {char === ' ' ? '\u00A0' : char}
+      </span>
+    ));
+
+  return (
+    <section id="top" className="relative min-h-screen overflow-hidden">
+      {/* Background image with overlay */}
+      <div className="absolute inset-0">
+        <img
+          src="https://images.pexels.com/photos/9971239/pexels-photo-9971239.jpeg?auto=compress&cs=tinysrgb&w=1920"
+          alt="Барбершоп Kasym"
+          className="h-full w-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-[rgba(7,7,7,0.7)] via-[rgba(7,7,7,0.6)] to-[#070707]" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[rgba(7,7,7,0.6)] to-transparent" />
+      </div>
+
+      {/* Content */}
+      <div className="relative z-10 flex min-h-screen flex-col justify-center">
+        <div className="wrap pt-20">
+          <div className="fade-in-up" style={{ animationDelay: '0.1s' }}>
+            <p className="eyebrow">Барбершоп №1 · Петропавловск</p>
+          </div>
+
+          <h1 className="font-display text-[clamp(52px,11vw,140px)] leading-[0.95] font-medium tracking-[0.01em] uppercase">
+            {splitTitle('KASYM')}
+          </h1>
+
+          <div className="fade-in-up mt-6 max-w-xl" style={{ animationDelay: '0.5s' }}>
+            <p className="text-[clamp(16px,2vw,20px)] leading-relaxed text-[var(--muted)]">
+              Три филиала, барберы-чемпионы,
+              <br />
+              ежедневно с 10:00 до 20:00
+            </p>
+          </div>
+
+          <div className="fade-in-up mt-8 flex flex-wrap gap-3" style={{ animationDelay: '0.7s' }}>
+            <button onClick={onBooking} className="btn btn-gold">
+              Записаться
+            </button>
+            <a href="#filialy" className="btn btn-ghost">
+              Филиалы
+            </a>
+          </div>
+        </div>
+      </div>
+
+      {/* Scroll indicator */}
+      <div className="absolute bottom-8 left-1/2 z-10 -translate-x-1/2 flex flex-col items-center gap-2">
+        <span className="text-[10px] tracking-[0.3em] uppercase text-[var(--muted)]">Листайте</span>
+        <div className="scroll-bounce">
+          <svg width="14" height="20" viewBox="0 0 14 20" fill="none" className="text-[var(--gold)]">
+            <rect x="0.5" y="0.5" width="13" height="19" rx="6.5" stroke="currentColor" opacity="0.4" />
+            <circle cx="7" cy="6" r="1.5" fill="currentColor" />
+          </svg>
+        </div>
+      </div>
+    </section>
+  );
+}
