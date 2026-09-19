@@ -20,7 +20,7 @@ export default function BookingCta({ onBooking }: BookingCtaProps) {
             <br />и <span className="gold-text">удобное время</span>
           </h2>
           <p className="mx-auto mt-4 mb-8 max-w-[56ch] text-[15.5px] text-[var(--muted)]">
-            Занимает минуту. Подтверждение придёт сразу.
+            Занимает минуту. Подтвердим по WhatsApp или перезвоним.
           </p>
           <button onClick={onBooking} className="btn btn-gold">
             Записаться
