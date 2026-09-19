@@ -25,6 +25,7 @@ export default function Hero({ onBooking }: HeroProps) {
         />
         <div className="absolute inset-0 bg-gradient-to-b from-[rgba(7,7,7,0.55)] via-[rgba(7,7,7,0.5)] to-[#070707]" />
         <div className="absolute inset-0 bg-gradient-to-r from-[rgba(7,7,7,0.75)] via-[rgba(7,7,7,0.25)] to-transparent" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(58%_46%_at_26%_40%,rgba(212,175,55,0.24)_0%,transparent_68%)]" />
       </div>
 
       {/* Content */}

@@ -6,7 +6,7 @@
 
 @layer base {
   :root {
-    --background: #070707;
+    --background: #0b0806;
     --foreground: #ffffff;
     --card: #0e0e0e;
     --gold: #d4af37;
@@ -27,7 +27,15 @@
   }
 
   body {
-    background: var(--background);
+    /* Золотистая подсветка фона: пятно сверху и слабое снизу справа.
+       attachment: fixed — чтобы свечение не уезжало вместе с прокруткой.
+       На iOS fixed не поддерживается и свечение просто прокручивается — не ломается. */
+    background-color: var(--background);
+    background-image:
+      radial-gradient(90vw 60vh at 50% 0%, rgba(212, 175, 55, 0.15) 0%, transparent 66%),
+      radial-gradient(70vw 55vh at 100% 100%, rgba(212, 175, 55, 0.07) 0%, transparent 62%);
+    background-attachment: fixed;
+    background-repeat: no-repeat;
     color: var(--foreground);
     font-family: 'Golos Text', ui-sans-serif, system-ui, sans-serif;
     line-height: 1.55;
