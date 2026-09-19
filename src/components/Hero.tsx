@@ -7,7 +7,7 @@ export default function Hero({ onBooking }: HeroProps) {
     text.split('').map((char, i) => (
       <span
         key={`${char}-${i}`}
-        className="char-in"
+        className="char-in bg-gradient-to-b from-[#f7ebc0] via-[#d4af37] to-[#8a6a2f] bg-clip-text text-transparent"
         style={{ animationDelay: `${i * 0.06}s` }}
       >
         {char === ' ' ? '\u00A0' : char}
@@ -19,17 +19,27 @@ export default function Hero({ onBooking }: HeroProps) {
       {/* Background image with overlay */}
       <div className="absolute inset-0">
         <img
-          src="https://images.pexels.com/photos/9971239/pexels-photo-9971239.jpeg?auto=compress&cs=tinysrgb&w=1920"
+          src="/hero.jpg"
           alt="Барбершоп Kasym"
           className="h-full w-full object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-[rgba(7,7,7,0.7)] via-[rgba(7,7,7,0.6)] to-[#070707]" />
-        <div className="absolute inset-0 bg-gradient-to-r from-[rgba(7,7,7,0.6)] to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-b from-[rgba(7,7,7,0.55)] via-[rgba(7,7,7,0.5)] to-[#070707]" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[rgba(7,7,7,0.75)] via-[rgba(7,7,7,0.25)] to-transparent" />
       </div>
 
       {/* Content */}
       <div className="relative z-10 flex min-h-screen flex-col justify-center">
         <div className="wrap pt-20">
+          <div className="fade-in-up" style={{ animationDelay: '0.05s' }}>
+            <img
+              src="/crest.png"
+              alt="Герб Kasym Barbershop"
+              width={560}
+              height={560}
+              className="mb-5 w-[clamp(96px,13vw,158px)] object-contain drop-shadow-[0_0_28px_rgba(212,175,55,0.28)]"
+            />
+          </div>
+
           <div className="fade-in-up" style={{ animationDelay: '0.1s' }}>
             <p className="eyebrow">Барбершоп №1 · Петропавловск</p>
           </div>
