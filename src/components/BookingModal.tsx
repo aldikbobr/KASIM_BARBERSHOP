@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, Check, ChevronLeft, ChevronRight, Calendar, Clock, User, Phone, Loader2 } from 'lucide-react';
+import { X, Check, ChevronLeft, ChevronRight, Calendar, Clock, User, Phone, Loader2, MessageCircle } from 'lucide-react';
 import { BARBERS, LOCATIONS } from '@/data';
 import { supabase } from '@/lib/supabase';
 
@@ -65,7 +65,9 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
     setSubmitting(true);
     setError('');
 
-    const dateStr = selectedDate.toISOString().split('T')[0];
+    // Не toISOString(): он считает в UTC и в нашем поясе сдвигает дату на день назад
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const dateStr = `${selectedDate.getFullYear()}-${pad(selectedDate.getMonth() + 1)}-${pad(selectedDate.getDate())}`;
 
     const { error: insertError } = await supabase.from('bookings').insert({
       barber,
@@ -99,6 +101,23 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
     return `${d.getDate()} ${MONTHS[d.getMonth()].toLowerCase()}`;
   };
 
+  // Заявка уходит в WhatsApp того филиала, который выбрал клиент
+  const waLink = () => {
+    const loc = LOCATIONS.find((l) => l.name === location);
+    if (!loc || !selectedDate) return '';
+    const text = [
+      'Здравствуйте! Хочу записаться.',
+      '',
+      `Мастер: ${barber}`,
+      `Филиал: ${loc.name}, ${loc.address}`,
+      `Дата: ${formatDate(selectedDate)}`,
+      `Время: ${time}`,
+      `Имя: ${name}`,
+      `Телефон: ${phone}`,
+    ].join('\n');
+    return `${loc.wa}?text=${encodeURIComponent(text)}`;
+  };
+
   const getCalendarDays = () => {
     const year = calendarMonth.getFullYear();
     const month = calendarMonth.getMonth();
@@ -125,6 +144,8 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
   const isSelected = (d: Date) => {
     return selectedDate?.getDate() === d.getDate() && selectedDate?.getMonth() === d.getMonth() && selectedDate?.getFullYear() === d.getFullYear();
   };
+
+  const wa = waLink();
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -157,7 +178,8 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
             </div>
             <h3 className="font-display text-2xl font-medium uppercase">Заявка отправлена</h3>
             <p className="max-w-sm text-[15px] leading-relaxed text-[var(--muted)]">
-              Мы свяжемся с вами для подтверждения записи. Спасибо!
+              Отправьте заявку нам в WhatsApp — так подтвердим быстрее. Не хотите писать —
+              ничего страшного: заявка уже у нас, мы перезвоним.
             </p>
             <div className="mt-2 rounded-xl border border-[var(--border)] bg-black/30 px-5 py-4 text-left text-sm">
               <div className="flex gap-2"><span className="text-[var(--muted)]">Мастер:</span><span className="text-white">{barber}</span></div>
@@ -165,7 +187,12 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
               <div className="flex gap-2"><span className="text-[var(--muted)]">Дата:</span><span className="text-white">{selectedDate && formatDate(selectedDate)}</span></div>
               <div className="flex gap-2"><span className="text-[var(--muted)]">Время:</span><span className="text-white">{time}</span></div>
             </div>
-            <button onClick={onClose} className="btn btn-gold mt-4">Закрыть</button>
+            {wa && (
+              <a href={wa} target="_blank" rel="noopener" className="btn btn-gold mt-4">
+                <MessageCircle size={16} /> Отправить в WhatsApp
+              </a>
+            )}
+            <button onClick={onClose} className="btn btn-ghost">Закрыть</button>
           </div>
         ) : (
           <>
@@ -360,7 +387,16 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
                     </div>
                   </div>
 
-                  {error && <p className="mt-4 text-[13px] text-red-400">{error}</p>}
+                  {error && (
+                    <div className="mt-4 flex flex-col items-start gap-2">
+                      <p className="text-[13px] text-red-400">{error}</p>
+                      {wa && (
+                        <a href={wa} target="_blank" rel="noopener" className="btn btn-ghost">
+                          <MessageCircle size={16} /> Написать в WhatsApp
+                        </a>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
