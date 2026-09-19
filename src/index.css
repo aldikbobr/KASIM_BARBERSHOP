@@ -27,14 +27,16 @@
   }
 
   body {
-    /* Золотистая подсветка фона: пятно сверху и слабое снизу справа.
-       attachment: fixed — чтобы свечение не уезжало вместе с прокруткой.
-       На iOS fixed не поддерживается и свечение просто прокручивается — не ломается. */
+    /* Золотистая подсветка фона: четыре мягких пятна по всей длине страницы.
+       Без background-attachment: fixed — с ним Chromium уводит фон в отдельный
+       слой и промахивается со смещением, страница рисуется пустой чернотой
+       с шапкой посередине. Проверено на живом сайте. */
     background-color: var(--background);
     background-image:
-      radial-gradient(90vw 60vh at 50% 0%, rgba(212, 175, 55, 0.15) 0%, transparent 66%),
-      radial-gradient(70vw 55vh at 100% 100%, rgba(212, 175, 55, 0.07) 0%, transparent 62%);
-    background-attachment: fixed;
+      radial-gradient(70vw 520px at 50% 0, rgba(212, 175, 55, 0.16) 0%, transparent 70%),
+      radial-gradient(55vw 620px at 100% 28%, rgba(212, 175, 55, 0.09) 0%, transparent 66%),
+      radial-gradient(55vw 620px at 0% 58%, rgba(212, 175, 55, 0.08) 0%, transparent 66%),
+      radial-gradient(60vw 560px at 80% 88%, rgba(212, 175, 55, 0.07) 0%, transparent 66%);
     background-repeat: no-repeat;
     color: var(--foreground);
     font-family: 'Golos Text', ui-sans-serif, system-ui, sans-serif;
