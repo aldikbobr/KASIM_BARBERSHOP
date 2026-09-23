@@ -1,5 +1,3 @@
-import { BOOKING_URL } from '@/data';
-
 interface BookingCtaProps {
   onBooking: () => void;
 }

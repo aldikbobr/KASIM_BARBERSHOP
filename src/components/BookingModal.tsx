@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, Check, ChevronLeft, ChevronRight, Calendar, Clock, User, Phone, Loader2, MessageCircle } from 'lucide-react';
-import { BARBERS, LOCATIONS } from '@/data';
+import { X, Check, ChevronLeft, ChevronRight, Calendar, Clock, User, Loader2, MessageCircle } from 'lucide-react';
+import { LOCATIONS } from '@/data';
 import { supabase } from '@/lib/supabase';
 
 interface BookingModalProps {
@@ -62,6 +62,9 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
 
   if (!open) return null;
 
+  // Мастера выбранного филиала: список зависит от филиала, поэтому филиал — первый шаг
+  const masters = LOCATIONS.find((l) => l.name === location)?.masters ?? [];
+
   const handleSubmit = async () => {
     if (!barber || !location || !selectedDate || !time || !name || !phone) return;
     setSubmitting(true);
@@ -91,8 +94,8 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
   };
 
   const canProceed = () => {
-    if (step === 0) return barber !== '';
-    if (step === 1) return location !== '';
+    if (step === 0) return location !== '';
+    if (step === 1) return barber !== '';
     if (step === 2) return selectedDate !== null;
     if (step === 3) return time !== '';
     if (step === 4) return name.trim() !== '' && phone.trim() !== '';
@@ -110,8 +113,8 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
     const text = [
       'Здравствуйте! Хочу записаться.',
       '',
-      `Мастер: ${barber}`,
       `Филиал: ${loc.name}, ${loc.address}`,
+      `Мастер: ${barber}`,
       `Дата: ${formatDate(selectedDate)}`,
       `Время: ${time}`,
       `Имя: ${name}`,
@@ -185,8 +188,8 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
               и перезвоним сами.
             </p>
             <div className="mt-2 rounded-xl border border-[var(--border)] bg-black/30 px-5 py-4 text-left text-sm">
-              <div className="flex gap-2"><span className="text-[var(--muted)]">Мастер:</span><span className="text-white">{barber}</span></div>
               <div className="flex gap-2"><span className="text-[var(--muted)]">Филиал:</span><span className="text-white">{location}</span></div>
+              <div className="flex gap-2"><span className="text-[var(--muted)]">Мастер:</span><span className="text-white">{barber}</span></div>
               <div className="flex gap-2"><span className="text-[var(--muted)]">Дата:</span><span className="text-white">{selectedDate && formatDate(selectedDate)}</span></div>
               <div className="flex gap-2"><span className="text-[var(--muted)]">Время:</span><span className="text-white">{time}</span></div>
             </div>
@@ -213,51 +216,20 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto px-6 py-5">
-              {/* Step 0: Barber */}
+              {/* Step 0: Location — филиал первым: от него зависит список мастеров */}
               {step === 0 && (
-                <div className="fade-in-up">
-                  <div className="eyebrow"><User size={14} /> Выберите мастера</div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => setBarber('Любой')}
-                      className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-left text-sm transition-all ${
-                        barber === 'Любой'
-                          ? 'border-[var(--gold)] bg-[var(--gold)]/5 text-white'
-                          : 'border-[var(--border)] text-[var(--muted)] hover:border-white/20'
-                      }`}
-                    >
-                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--gold)]/10 text-xs text-[var(--gold)]">★</span>
-                      <span>Любой мастер</span>
-                    </button>
-                    {BARBERS.map((b) => (
-                      <button
-                        key={b.id}
-                        onClick={() => setBarber(b.name)}
-                        className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-left text-sm transition-all ${
-                          barber === b.name
-                            ? 'border-[var(--gold)] bg-[var(--gold)]/5 text-white'
-                            : 'border-[var(--border)] text-[var(--muted)] hover:border-white/20'
-                        }`}
-                      >
-                        {b.image && (
-                          <img src={b.image} alt="" className="h-8 w-8 rounded-full object-cover object-[center_18%]" />
-                        )}
-                        <span className="truncate">{b.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Step 1: Location */}
-              {step === 1 && (
                 <div className="fade-in-up">
                   <div className="eyebrow">Выберите филиал</div>
                   <div className="flex flex-col gap-2">
                     {LOCATIONS.map((l) => (
                       <button
                         key={l.name}
-                        onClick={() => setLocation(l.name)}
+                        aria-pressed={location === l.name}
+                        onClick={() => {
+                          setLocation(l.name);
+                          // сменили филиал — прежний мастер в нём не работает
+                          if (l.name !== location) setBarber('');
+                        }}
                         className={`flex items-center justify-between rounded-xl border px-5 py-4 text-left transition-all ${
                           location === l.name
                             ? 'border-[var(--gold)] bg-[var(--gold)]/5'
@@ -271,6 +243,45 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
                           <div className="mt-0.5 text-[13px] text-[var(--muted)]">{l.address}</div>
                         </div>
                         {location === l.name && <Check size={18} className="text-[var(--gold)]" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Step 1: Barber — только мастера выбранного филиала */}
+              {step === 1 && (
+                <div className="fade-in-up">
+                  <div className="eyebrow"><User size={14} /> Выберите мастера</div>
+                  <div className="mb-3 text-[13px] text-[var(--muted)]">
+                    Филиал: <span className="text-white">{location}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      aria-pressed={barber === 'Любой'}
+                      onClick={() => setBarber('Любой')}
+                      className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-left text-sm transition-all ${
+                        barber === 'Любой'
+                          ? 'border-[var(--gold)] bg-[var(--gold)]/5 text-white'
+                          : 'border-[var(--border)] text-[var(--muted)] hover:border-white/20'
+                      }`}
+                    >
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--gold)]/10 text-xs text-[var(--gold)]">★</span>
+                      <span>Любой мастер</span>
+                    </button>
+                    {masters.map((m) => (
+                      <button
+                        key={m}
+                        aria-pressed={barber === m}
+                        onClick={() => setBarber(m)}
+                        className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-left text-sm transition-all ${
+                          barber === m
+                            ? 'border-[var(--gold)] bg-[var(--gold)]/5 text-white'
+                            : 'border-[var(--border)] text-[var(--muted)] hover:border-white/20'
+                        }`}
+                      >
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/5 font-display text-xs text-white/70">{m[0]}</span>
+                        <span className="truncate">{m}</span>
                       </button>
                     ))}
                   </div>
@@ -358,8 +369,9 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
                   <div className="eyebrow">Ваши контакты</div>
                   <div className="flex flex-col gap-3">
                     <div>
-                      <label className="mb-1.5 block text-[11px] tracking-[0.12em] uppercase text-[var(--muted)]">Имя</label>
+                      <label htmlFor="booking-name" className="mb-1.5 block text-[11px] tracking-[0.12em] uppercase text-[var(--muted)]">Имя</label>
                       <input
+                        id="booking-name"
                         type="text"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
@@ -368,8 +380,9 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
                       />
                     </div>
                     <div>
-                      <label className="mb-1.5 block text-[11px] tracking-[0.12em] uppercase text-[var(--muted)]">Телефон</label>
+                      <label htmlFor="booking-phone" className="mb-1.5 block text-[11px] tracking-[0.12em] uppercase text-[var(--muted)]">Телефон</label>
                       <input
+                        id="booking-phone"
                         type="tel"
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
@@ -383,8 +396,8 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
                   <div className="mt-5 rounded-xl border border-[var(--border)] bg-black/20 p-4">
                     <div className="text-[11px] tracking-[0.12em] uppercase text-[var(--gold)]">Ваша запись</div>
                     <div className="mt-2 space-y-1 text-sm text-[var(--muted)]">
-                      <div>Мастер: <span className="text-white">{barber}</span></div>
                       <div>Филиал: <span className="text-white">{location}</span></div>
+                      <div>Мастер: <span className="text-white">{barber}</span></div>
                       <div>Дата: <span className="text-white">{selectedDate && formatDate(selectedDate)}</span></div>
                       <div>Время: <span className="text-white">{time}</span></div>
                     </div>
