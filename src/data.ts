@@ -133,23 +133,3 @@ export const STATS = [
   { n: '3', label: 'филиала' },
   { n: '2020', label: 'год основания' },
 ];
-
-export interface TeamMember {
-  id: string;
-  name: string;
-  role: string;
-  image: string | null;
-  social?: {
-    instagram?: string;
-    whatsapp?: string;
-  };
-}
-
-export const BARBERS: TeamMember[] = [
-  { id: '1', name: 'Фейд', role: 'классика и чёткий переход', image: 'https://images.pexels.com/photos/8552627/pexels-photo-8552627.jpeg?auto=compress&cs=tinysrgb&h=650&w=940', social: { whatsapp: 'https://wa.me/77479777080' } },
-  { id: '2', name: 'Борода', role: 'опасная бритва, горячее полотенце', image: 'https://images.pexels.com/photos/18298041/pexels-photo-18298041.jpeg?auto=compress&cs=tinysrgb&h=650&w=940', social: { whatsapp: 'https://wa.me/77788394584' } },
-  { id: '3', name: 'Детские', role: 'спокойно и без слёз', image: 'https://images.pexels.com/photos/2062463/pexels-photo-2062463.jpeg?auto=compress&cs=tinysrgb&h=650&w=940', social: { whatsapp: 'https://wa.me/77079277780' } },
-  { id: '4', name: 'Андеркат', role: 'объём и текстура', image: 'https://images.pexels.com/photos/16986979/pexels-photo-16986979.jpeg?auto=compress&cs=tinysrgb&h=650&w=940', social: { whatsapp: 'https://wa.me/77479777080' } },
-  { id: '5', name: 'Камуфляж седины', role: 'естественный тон', image: 'https://images.pexels.com/photos/2174112/pexels-photo-2174112.jpeg?auto=compress&cs=tinysrgb&h=650&w=940', social: { whatsapp: 'https://wa.me/77788394584' } },
-  { id: '6', name: 'Бритьё головы', role: 'гладко, с уходом', image: 'https://images.pexels.com/photos/2174113/pexels-photo-2174113.jpeg?auto=compress&cs=tinysrgb&h=650&w=940', social: { whatsapp: 'https://wa.me/77079277780' } },
-];
