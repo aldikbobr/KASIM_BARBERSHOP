@@ -8,7 +8,7 @@ interface HeroProps {
 
 // Живое видео из филиала вместо стокового фото. Тот же файл, что и в «Работах»,
 // поэтому браузер качает его один раз.
-const VIDEO = { src: '/works/fade-beard.mp4', poster: '/works/fade-beard.jpg' };
+const VIDEO = { src: '/works/razor-shave.mp4', poster: '/works/razor-shave.jpg' };
 
 export default function Hero({ onBooking }: HeroProps) {
   const video = useRef<HTMLVideoElement>(null);
@@ -100,7 +100,7 @@ export default function Hero({ onBooking }: HeroProps) {
               ref={video}
               src={VIDEO.src}
               poster={VIDEO.poster}
-              aria-label="Готовая стрижка: фейд и оформленная борода"
+              aria-label="Барбер стрижёт клиента и оформляет бороду опасной бритвой"
               autoPlay
               muted
               loop
