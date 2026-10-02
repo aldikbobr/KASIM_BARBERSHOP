@@ -1,4 +1,4 @@
-import { LOCATIONS, BOOKING_URL, INSTAGRAM_URL, TWOGIS_URL, RATING } from '@/data';
+import { LOCATIONS, INSTAGRAM_URL, TWOGIS_URL, RATING } from '@/data';
 
 export default function Footer() {
   return (
@@ -20,9 +20,6 @@ export default function Footer() {
           </div>
           <div className="flex flex-col gap-2.5 text-sm text-[var(--muted)]">
             <div className="ftr-title">Ещё</div>
-            <a href={BOOKING_URL} target="_blank" rel="noopener" className="hover:text-[var(--gold-soft)]">
-              Онлайн-запись
-            </a>
             <a href={INSTAGRAM_URL} target="_blank" rel="noopener" className="hover:text-[var(--gold-soft)]">
               Instagram @kasym_barbershop
             </a>

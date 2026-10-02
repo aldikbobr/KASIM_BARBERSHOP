@@ -1,4 +1,3 @@
-export const BOOKING_URL = 'https://zapis.kz/barbershop-kasym';
 export const INSTAGRAM_URL = 'https://instagram.com/kasym_barbershop';
 export const TWOGIS_URL = 'https://2gis.kz/petropavlovsk/firm/70000001041837300';
 
