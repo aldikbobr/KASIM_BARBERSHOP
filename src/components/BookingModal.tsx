@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, Check, ChevronLeft, ChevronRight, Calendar, Clock, User, Loader2, MessageCircle } from 'lucide-react';
+import { X, Check, ChevronLeft, ChevronRight, Calendar, Clock, User, MessageCircle } from 'lucide-react';
 import { LOCATIONS, MASTER_PHOTOS } from '@/data';
-import { supabase } from '@/lib/supabase';
 
 interface BookingModalProps {
   open: boolean;
@@ -29,9 +28,7 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
   const [time, setTime] = useState<string>('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [error, setError] = useState('');
 
   const reset = useCallback(() => {
     setStep(0);
@@ -42,9 +39,7 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
     setTime('');
     setName('');
     setPhone('');
-    setSubmitting(false);
     setSuccess(false);
-    setError('');
   }, []);
 
   useEffect(() => {
@@ -65,31 +60,10 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
   // Мастера выбранного филиала: список зависит от филиала, поэтому филиал — первый шаг
   const masters = LOCATIONS.find((l) => l.name === location)?.masters ?? [];
 
-  const handleSubmit = async () => {
+  // Заявка уходит только в WhatsApp филиала. Раньше она ещё писалась в Supabase,
+  // но проект Bolt удалён (DNS не резолвится, 02.10.2026) и запись падала с ошибкой.
+  const handleSubmit = () => {
     if (!barber || !location || !selectedDate || !time || !name || !phone) return;
-    setSubmitting(true);
-    setError('');
-
-    // Не toISOString(): он считает в UTC и в нашем поясе сдвигает дату на день назад
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const dateStr = `${selectedDate.getFullYear()}-${pad(selectedDate.getMonth() + 1)}-${pad(selectedDate.getDate())}`;
-
-    const { error: insertError } = await supabase.from('bookings').insert({
-      barber,
-      location,
-      date: dateStr,
-      time,
-      name,
-      phone,
-    });
-
-    setSubmitting(false);
-
-    if (insertError) {
-      setError('Не удалось отправить заявку. Попробуйте ещё раз.');
-      return;
-    }
-
     setSuccess(true);
   };
 
@@ -181,11 +155,10 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--gold)]/10">
               <MessageCircle size={32} className="text-[var(--gold)]" />
             </div>
-            <h3 className="font-display text-2xl font-medium uppercase">Подтвердите запись</h3>
+            <h3 className="font-display text-2xl font-medium uppercase">Остался один шаг</h3>
             <p className="max-w-sm text-[15px] leading-relaxed text-[var(--muted)]">
-              Нажмите кнопку — откроется WhatsApp филиала с готовым текстом, останется
-              отправить. Не отправите — ничего страшного: заявку мы уже получили
-              и перезвоним сами.
+              Нажмите кнопку — откроется WhatsApp филиала с готовым текстом.
+              Отправьте его, и администратор подтвердит запись.
             </p>
             <div className="mt-2 rounded-xl border border-[var(--border)] bg-black/30 px-5 py-4 text-left text-sm">
               <div className="flex gap-2"><span className="text-[var(--muted)]">Филиал:</span><span className="text-white">{location}</span></div>
@@ -406,17 +379,6 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
                       <div>Время: <span className="text-white">{time}</span></div>
                     </div>
                   </div>
-
-                  {error && (
-                    <div className="mt-4 flex flex-col items-start gap-2">
-                      <p className="text-[13px] text-red-400">{error}</p>
-                      {wa && (
-                        <a href={wa} target="_blank" rel="noopener" className="btn btn-ghost">
-                          <MessageCircle size={16} /> Написать в WhatsApp
-                        </a>
-                      )}
-                    </div>
-                  )}
                 </div>
               )}
             </div>
@@ -442,10 +404,10 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
               ) : (
                 <button
                   onClick={handleSubmit}
-                  disabled={!canProceed() || submitting}
-                  className={`btn ${canProceed() && !submitting ? 'btn-gold' : 'btn-ghost opacity-40'}`}
+                  disabled={!canProceed()}
+                  className={`btn ${canProceed() ? 'btn-gold' : 'btn-ghost opacity-40'}`}
                 >
-                  {submitting ? <><Loader2 size={16} className="animate-spin" /> Отправка</> : <>Записаться</>}
+                  Записаться
                 </button>
               )}
             </div>
