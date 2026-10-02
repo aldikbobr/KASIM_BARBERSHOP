@@ -4,10 +4,12 @@ import Hero from '@/components/Hero';
 import Stats from '@/components/Stats';
 import Services from '@/components/Services';
 import Works from '@/components/Works';
+import Founder from '@/components/Founder';
 import Barbers from '@/components/Barbers';
 import Reviews from '@/components/Reviews';
 import Locations from '@/components/Locations';
 import BookingCta from '@/components/BookingCta';
+import Franchise from '@/components/Franchise';
 import Footer from '@/components/Footer';
 import BookingModal from '@/components/BookingModal';
 
@@ -24,10 +26,12 @@ function App() {
         <Stats />
         <Services />
         <Works />
+        <Founder />
         <Barbers />
         <Reviews />
         <Locations />
         <BookingCta onBooking={openBooking} />
+        <Franchise />
       </main>
       <Footer />
       <BookingModal open={bookingOpen} onClose={closeBooking} />

@@ -1,5 +1,5 @@
 import { SectionHead } from './SectionHead';
-import { LOCATIONS } from '@/data';
+import { LOCATIONS, MASTER_PHOTOS } from '@/data';
 
 export default function Barbers() {
   return (
@@ -34,14 +34,24 @@ export default function Barbers() {
               >
                 {l.masters.map((m) => (
                   <li key={m} className="flex items-center gap-3">
-                    {/* Кружок с буквой — заглушка на месте фото мастера.
-                        Появятся фото — сюда <img> вместо него, разметка та же. */}
-                    <span
-                      aria-hidden="true"
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-black/30 font-display text-[13px] text-[var(--gold)]"
-                    >
-                      {m[0]}
-                    </span>
+                    {MASTER_PHOTOS[m] ? (
+                      <img
+                        src={MASTER_PHOTOS[m]}
+                        alt=""
+                        width={44}
+                        height={44}
+                        loading="lazy"
+                        className="h-11 w-11 shrink-0 rounded-full object-cover ring-1 ring-[rgba(212,175,55,0.35)]"
+                      />
+                    ) : (
+                      // Кружок с буквой — заглушка, пока нет фото мастера.
+                      <span
+                        aria-hidden="true"
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-black/30 font-display text-[14px] text-[var(--gold)]"
+                      >
+                        {m[0]}
+                      </span>
+                    )}
                     <span className="font-display text-[17px] tracking-[0.04em] uppercase text-white/90">{m}</span>
                   </li>
                 ))}

@@ -17,7 +17,8 @@ export default function Header({ onBooking }: HeaderProps) {
           Kasym
         </a>
 
-        <nav className="hidden gap-9 text-[13px] tracking-[0.09em] uppercase text-[var(--muted)] md:flex">
+        {/* 8 пунктов влезают в строку только от 1280px, уже — бургер */}
+        <nav className="hidden gap-7 text-[13px] tracking-[0.09em] uppercase text-[var(--muted)] xl:flex">
           {NAV_ITEMS.map((item) => (
             <a key={item.href} href={item.href} className="nav-link hover:text-white">
               {item.label}
@@ -30,7 +31,7 @@ export default function Header({ onBooking }: HeaderProps) {
             Записаться
           </button>
           <button
-            className="flex h-10 w-10 items-center justify-center text-white md:hidden"
+            className="flex h-10 w-10 items-center justify-center text-white xl:hidden"
             onClick={() => setOpen((v) => !v)}
             aria-label="Меню"
             aria-expanded={open}
@@ -41,7 +42,7 @@ export default function Header({ onBooking }: HeaderProps) {
       </div>
 
       {open && (
-        <div className="absolute left-0 right-0 top-full flex flex-col bg-[rgba(7,7,7,0.97)] border-t border-b border-[var(--border)] px-6 md:hidden">
+        <div className="absolute left-0 right-0 top-full flex flex-col bg-[rgba(7,7,7,0.97)] border-t border-b border-[var(--border)] px-6 xl:hidden">
           {NAV_ITEMS.map((item) => (
             <a
               key={item.href}

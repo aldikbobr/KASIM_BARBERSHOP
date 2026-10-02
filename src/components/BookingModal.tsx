@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, Check, ChevronLeft, ChevronRight, Calendar, Clock, User, Loader2, MessageCircle } from 'lucide-react';
-import { LOCATIONS } from '@/data';
+import { LOCATIONS, MASTER_PHOTOS } from '@/data';
 import { supabase } from '@/lib/supabase';
 
 interface BookingModalProps {
@@ -280,7 +280,11 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
                             : 'border-[var(--border)] text-[var(--muted)] hover:border-white/20'
                         }`}
                       >
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/5 font-display text-xs text-white/70">{m[0]}</span>
+                        {MASTER_PHOTOS[m] ? (
+                          <img src={MASTER_PHOTOS[m]} alt="" width={32} height={32} className="h-8 w-8 shrink-0 rounded-full object-cover" />
+                        ) : (
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/5 font-display text-xs text-white/70">{m[0]}</span>
+                        )}
                         <span className="truncate">{m}</span>
                       </button>
                     ))}

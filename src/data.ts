@@ -7,19 +7,39 @@ export const RATING = { score: '4.9', votes: 550, reviews: 318 };
 export const NAV_ITEMS = [
   { href: '#uslugi', label: 'Услуги' },
   { href: '#raboty', label: 'Работы' },
+  { href: '#osnovatel', label: 'Основатель' },
   { href: '#barbery', label: 'Барберы' },
   { href: '#otzyvy', label: 'Отзывы' },
   { href: '#filialy', label: 'Филиалы' },
+  { href: '#franshiza', label: 'Франшиза' },
   { href: '#kontakty', label: 'Контакты' },
 ];
 
 // masters — свои мастера у каждого филиала. В записи сначала выбирают филиал,
 // потом мастера из его списка. Порядок в массиве = порядок кнопок в модалке.
 export const LOCATIONS = [
-  { name: 'ДСР', address: 'ул. Жабаева, 106', phone: '+7 747 977 70 80', wa: 'https://wa.me/77479777080', masters: ['Есим', 'Ляйсан', 'Индира', 'Алькарим', 'Балгат', 'Дания', 'Нуни'] },
-  { name: 'Тайга', address: 'ул. Жабаева, 161', phone: '+7 778 839 45 84', wa: 'https://wa.me/77788394584', masters: ['Темирхан', 'Нурсеит', 'Зангар'] },
-  { name: 'Шажимбаева', address: 'ул. Шажимбаева, 101', phone: '+7 707 927 77 80', wa: 'https://wa.me/77079277780', masters: ['Сапар', 'Касым', 'Данияр', 'Аян'] },
+  { name: 'ДСР', address: 'ул. Жабаева, 106', phone: '+7 747 977 70 80', wa: 'https://wa.me/77479777080', masters: ['Индира', 'Алькарим', 'Есим', 'Нуни', 'Дания', 'Балгат', 'Ляйсан'] },
+  { name: 'Тайга', address: 'ул. Жабаева, 161', phone: '+7 778 839 45 84', wa: 'https://wa.me/77788394584', masters: ['Темирхан', 'Алексей', 'Зангар', 'Нурсеит'] },
+  { name: 'Шажимбаева', address: 'ул. Шажимбаева, 101', phone: '+7 707 927 77 80', wa: 'https://wa.me/77079277780', masters: ['Сапар', 'Аян', 'Данияр', 'Касым'] },
 ];
+
+// Фото мастеров (квадрат по лицу, 192px). Нет фото — в карточке кружок с буквой.
+export const MASTER_PHOTOS: Record<string, string> = {
+  Сапар: '/barbers/sapar.jpg',
+  Аян: '/barbers/ayan.jpg',
+  Данияр: '/barbers/daniyar.jpg',
+  Касым: '/barbers/kasym.jpg',
+  Темирхан: '/barbers/temirkhan.jpg',
+  Алексей: '/barbers/aleksey.jpg',
+  Зангар: '/barbers/zangar.jpg',
+  Нурсеит: '/barbers/nurseit.jpg',
+  Индира: '/barbers/indira.jpg',
+  Алькарим: '/barbers/alkarim.jpg',
+  Есим: '/barbers/esim.jpg',
+  Нуни: '/barbers/nuni.jpg',
+  Дания: '/barbers/daniya.jpg',
+  Балгат: '/barbers/balgat.jpg',
+};
 
 export const PRICE_TIERS = ['Мастер', 'Топ-мастер', 'Касым'];
 
@@ -95,13 +115,14 @@ export const PRICES_BUNDLES = [
   { title: 'Уход', text: 'Чистка лица, ваксинг, массаж головы, маска', value: '10 000' },
 ];
 
+// Видео из филиалов (02.10.2026): /works/<name>.mp4 + кадр-обложка /works/<name>.jpg.
 export const WORKS = [
-  { src: 'https://images.pexels.com/photos/4625632/pexels-photo-4625632.jpeg?auto=compress&cs=tinysrgb&h=650&w=940', alt: 'Скин-фейд со спины, чёткая линия перехода' },
-  { src: 'https://images.pexels.com/photos/12464841/pexels-photo-12464841.jpeg?auto=compress&cs=tinysrgb&h=650&w=940', alt: 'Подстриженная борода и чистая линия на шее' },
-  { src: 'https://images.pexels.com/photos/34702982/pexels-photo-34702982.jpeg?auto=compress&cs=tinysrgb&h=650&w=940', alt: 'Текстурный кроп с плавным переходом к затылку' },
-  { src: 'https://images.pexels.com/photos/39559268/pexels-photo-39559268.jpeg?auto=compress&cs=tinysrgb&h=650&w=940', alt: 'Низкий тейпер с ровной линией шеи' },
-  { src: 'https://images.pexels.com/photos/10775080/pexels-photo-10775080.jpeg?auto=compress&cs=tinysrgb&h=650&w=940', alt: 'Высокий скин-фейд у виска' },
-  { src: 'https://images.pexels.com/photos/39559270/pexels-photo-39559270.jpeg?auto=compress&cs=tinysrgb&h=650&w=940', alt: 'Короткая стрижка с чистым переходом на затылке' },
+  { name: 'fade-beard', alt: 'Фейд и оформленная борода' },
+  { name: 'side-part', alt: 'Укладка с пробором и фейд на висках' },
+  { name: 'razor-lines', alt: 'Рисунок бритвой на текстурной стрижке' },
+  { name: 'razor-shave', alt: 'Оформление бороды опасной бритвой' },
+  { name: 'curly', alt: 'Кудрявая текстура с мягким переходом' },
+  { name: 'low-fade-beard', alt: 'Низкий фейд и густая борода' },
 ];
 
 export const REVIEWS = [
@@ -126,6 +147,24 @@ export const REVIEWS = [
     text: 'Молодой Барбер Темирхан, качественно подстриг, полностью оправдал и даже больше, с каждым приходом все лучше и лучше',
   },
 ];
+
+// Из биографии Касыма (docx от 02.10.2026).
+export const FOUNDER_PATH = [
+  { when: '13+ лет', text: 'В профессии. Начинал в Шымкенте — по 30–40 клиентов в день: скорость, дисциплина, фейд и опасная бритва до автоматизма.' },
+  { when: '2018', text: 'Переезд в Петропавловск по программе «Юг — Север». Работал ведущим мастером и изучал, как стригутся на севере.' },
+  { when: '2020', text: 'Открыл первый Kasym Barbershop — сам выбирал интерьер, косметику и поставщиков.' },
+  { when: 'Сегодня', text: 'Три филиала, флагман в мкр. Жас Оркен (ЖК «8 квартал»), своя школа барберинга и франшиза.' },
+];
+
+export const FRANCHISE = [
+  { title: 'Бизнес-модель под ключ', text: 'Пошаговые инструкции по открытию, управлению и продвижению барбершопа.' },
+  { title: 'Обучение и стандарты', text: 'Фирменная школа барберинга: готовим мастеров и администраторов с нуля.' },
+  { title: 'Маркетинг и брендбук', text: 'Готовые рекламные стратегии, айдентика и оформление пространства.' },
+  { title: 'Поставки', text: 'Каналы закупки премиальной мужской косметики и профессионального оборудования.' },
+];
+
+// Филиал Шажимбаева — там работает сам Касым. Будет отдельный номер для франшизы — заменить.
+export const FRANCHISE_WA = `https://wa.me/77079277780?text=${encodeURIComponent('Здравствуйте! Интересует франшиза Kasym Barbershop.')}`;
 
 export const STATS = [
   { n: RATING.score, label: 'рейтинг в 2ГИС', gold: true },
