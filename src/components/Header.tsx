@@ -14,7 +14,7 @@ export default function Header({ onBooking }: HeaderProps) {
       <div className="wrap flex h-[68px] items-center justify-between">
         <a href="#top" className="flex items-center gap-2.5 font-display text-[17px] font-semibold tracking-[0.28em] uppercase">
           <img src="/crest.png" alt="" className="h-8 w-8 shrink-0 object-contain" />
-          Kasym
+          Qasym
         </a>
 
         {/* 8 пунктов влезают в строку только от 1280px, уже — бургер */}

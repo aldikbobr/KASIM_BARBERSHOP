@@ -9,7 +9,7 @@ export default function Franchise() {
           eyebrow="Франшиза"
           title={
             <>
-              Kasym Barbershop
+              Qasym Barbershop
               <br />
               <span className="gold-text">в вашем городе</span>
             </>

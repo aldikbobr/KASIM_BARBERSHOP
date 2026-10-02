@@ -9,7 +9,7 @@ export default function Founder() {
           <div className="overflow-hidden rounded-[14px] ring-1 ring-white/[0.08]">
             <img
               src="/kasym-about.jpg"
-              alt="Касым Амангельдин, основатель Kasym Barbershop"
+              alt="Касым Амангельдин, основатель Qasym Barbershop"
               width={361}
               height={640}
               loading="lazy"

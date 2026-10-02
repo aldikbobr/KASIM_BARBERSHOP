@@ -6,7 +6,7 @@ export default function Footer() {
       <div className="wrap">
         <div className="flex flex-wrap justify-between gap-9">
           <div className="flex flex-col gap-2.5 text-sm text-[var(--muted)]">
-            <div className="ftr-title">Kasym Barbershop</div>
+            <div className="ftr-title">Qasym Barbershop</div>
             <span>Петропавловск, Казахстан</span>
             <span>Ежедневно 10:00—20:00</span>
           </div>
@@ -32,7 +32,7 @@ export default function Footer() {
           </div>
         </div>
         <div className="mt-10 text-[12.5px] tracking-[0.04em] text-[var(--muted)] opacity-70">
-          © Kasym Barbershop
+          © Qasym Barbershop
         </div>
       </div>
     </footer>
