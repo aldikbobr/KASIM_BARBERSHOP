@@ -67,10 +67,14 @@ export default function Services() {
                       </p>
                     )}
                     <div className="font-display gold-text text-[15px] tracking-[0.02em] md:text-[16px]">{s.price}</div>
-                    {s.note && <div className="mt-0.5 text-[11.5px] text-[var(--gold-soft)] opacity-80 md:text-[12px]">{s.note}</div>}
                   </div>
                 ) : (
-                // Телефон: узкая карточка, «Основатель» в колонку не влезает — строками.
+                <>
+                {/* примечание над ценами, чтобы ряды цен во всех карточках оставались внизу на одном уровне */}
+                {s.note && (
+                  <p className="mt-2 text-[11.5px] text-[var(--gold-soft)] opacity-80 md:text-[12px]">{s.note}</p>
+                )}
+                {/* Телефон: узкая карточка, «Основатель» в колонку не влезает — строками. */}
                 <div className="mt-auto flex flex-col gap-1 pt-4 sm:flex-row sm:gap-2">
                   {s.prices.map((price, i) => (
                     <div key={PRICE_TIERS[i]} className="flex items-baseline justify-between gap-2 sm:block sm:flex-1">
@@ -95,6 +99,7 @@ export default function Services() {
                     </div>
                   ))}
                 </div>
+                </>
                 )}
               </div>
             </article>

@@ -44,6 +44,8 @@ export const MASTER_PHOTOS: Record<string, string> = {
 
 export const PRICE_TIERS = ['Мастер', 'Топ-мастер', 'Основатель'];
 
+// Прайс заказчика от 03.10.2026: колонка «Мастер» — его цены, у топ-мастера всё на 1 000 выше.
+// Колонку «Основатель» заказчик не присылал — оставлены прежние цены, «—» где цены нет.
 export const SERVICES = [
   {
     name: 'Стрижка',
@@ -57,7 +59,7 @@ export const SERVICES = [
     img: 'https://images.pexels.com/photos/9153970/pexels-photo-9153970.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
     alt: 'Моделирование бороды опасной бритвой',
     desc: 'Коррекция формы, окантовка, оформление контура',
-    prices: ['3 500', '4 000', '5 000'],
+    prices: ['3 500', '4 500', '5 000'],
   },
   {
     name: 'Стрижка + борода',
@@ -65,6 +67,13 @@ export const SERVICES = [
     alt: 'Комплекс: стрижка и оформление бороды',
     desc: 'Полный образ за один визит — стрижка и борода вместе',
     prices: ['—', '—', '13 000'],
+  },
+  {
+    name: 'Королевское бритьё головы',
+    img: '/services/razor.jpg',
+    alt: 'Мастер работает опасной бритвой',
+    desc: 'Бритьё головы опасной бритвой — лезвием',
+    prices: ['5 000', '6 000', '—'],
   },
   // Цена не по уровню мастера, а по густоте волос — поэтому price вместо prices.
   {
@@ -87,14 +96,14 @@ export const SERVICES = [
     img: 'https://images.pexels.com/photos/7447145/pexels-photo-7447145.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
     alt: 'Камуфляж седины в бороде',
     desc: 'Маскировка седых волос в бороде',
-    prices: ['3 000', '3 500', '4 000'],
+    prices: ['3 000', '4 000', '4 000'],
   },
   {
     name: 'Чистка лица',
     img: '/services/face.jpg',
     alt: 'Мастер наносит средство кистью на лицо клиента',
     desc: 'Отпаривание, бритьё, скраб, маска',
-    price: '5 000',
+    prices: ['5 000', '6 000', '—'],
     note: 'Вместе со стрижкой — 10 000',
   },
   {
@@ -102,14 +111,14 @@ export const SERVICES = [
     img: 'https://images.pexels.com/photos/18704463/pexels-photo-18704463.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
     alt: 'Нанесение уходовой маски для лица',
     desc: 'Очищающая или питательная маска для кожи',
-    prices: ['1 000', '1 500', '2 000'],
+    prices: ['1 000', '2 000', '2 000'],
   },
   {
     name: 'Ваксинг',
     img: 'https://images.pexels.com/photos/15577126/pexels-photo-15577126.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
     alt: 'Удаление нежелательных волос воском',
     desc: 'Удаление волос горячим воском, одна зона',
-    prices: ['1 000', '1 000', '1 500'],
+    prices: ['1 000', '2 000', '1 500'],
   },
   {
     name: 'Hair Tattoo',
