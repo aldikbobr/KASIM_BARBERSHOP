@@ -17,7 +17,6 @@ const MEDIA = [
   { src: 'v-design-1.mp4', alt: 'Конкурсная стрижка с рисунком бритвой' },
   { src: 'v-design-2.mp4', alt: 'Фейд с рисунком на виске' },
   { src: 'v-curly.mp4', alt: 'Кудрявая детская стрижка' },
-  { src: 'v-beard.mp4', alt: 'Оформленная борода модели' },
   { src: 'p-neon.jpg', alt: 'Неоновая вывеска Kasym Barbershop, основан в 2020' },
 ];
 
