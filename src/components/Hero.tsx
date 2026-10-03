@@ -6,8 +6,7 @@ interface HeroProps {
   onBooking: () => void;
 }
 
-// Живое видео из филиала вместо стокового фото. Тот же файл, что и в «Работах»,
-// поэтому браузер качает его один раз.
+// Живое видео из филиала (IMG_9354: стрижка и борода опасной бритвой) вместо стокового фото.
 const VIDEO = { src: '/works/razor-shave.mp4', poster: '/works/razor-shave.jpg' };
 
 export default function Hero({ onBooking }: HeroProps) {
