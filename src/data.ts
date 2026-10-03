@@ -122,7 +122,6 @@ export const SERVICES = [
 
 export const PRICES_KIDS = [
   { service: 'Детская стрижка до 12 лет', value: '3 500' },
-  { service: 'Подростки', value: '4 000' },
   { service: 'Студенты — скидка 10%', value: '4 500' },
   { service: 'Детская стрижка у основателя', value: '5 000' },
 ];
