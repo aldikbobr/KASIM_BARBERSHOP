@@ -43,7 +43,7 @@ export default function Reviews() {
   return (
     <section id="otzyvy" className="sec border-t border-[var(--border)]">
       <div className="wrap">
-        <div className="rv mb-13 flex flex-wrap items-end justify-between gap-8">
+        <div className="rv mb-12 flex flex-wrap items-end justify-between gap-8">
           <div>
             <div className="eyebrow">Отзывы</div>
             <h2 className="h2">

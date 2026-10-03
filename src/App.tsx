@@ -9,6 +9,7 @@ import Barbers from '@/components/Barbers';
 import Reviews from '@/components/Reviews';
 import Locations from '@/components/Locations';
 import BookingCta from '@/components/BookingCta';
+import Contests from '@/components/Contests';
 import Franchise from '@/components/Franchise';
 import Footer from '@/components/Footer';
 import BookingModal from '@/components/BookingModal';
@@ -31,6 +32,7 @@ function App() {
         <Reviews />
         <Locations />
         <BookingCta onBooking={openBooking} />
+        <Contests />
         <Franchise />
       </main>
       <Footer />
