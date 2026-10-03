@@ -14,8 +14,7 @@ const MEDIA = [
   { src: 'v-barber.mp4', alt: 'Барбер стрижёт модель на соревновании' },
   { src: 'v-camera.mp4', alt: 'Конкурсанты за работой под камерами' },
   { src: 'v-arena.mp4', alt: 'Зал соревнований с рядами зеркал' },
-  { src: 'v-design-1.mp4', alt: 'Конкурсная стрижка с рисунком бритвой' },
-  { src: 'v-design-2.mp4', alt: 'Фейд с рисунком на виске' },
+  { src: 'v-design-2.mp4', alt: 'Фейд с рисунком бритвой на виске' },
   { src: 'v-curly.mp4', alt: 'Кудрявая детская стрижка' },
   { src: 'p-neon.jpg', alt: 'Неоновая вывеска Kasym Barbershop, основан в 2020' },
 ];
@@ -87,7 +86,8 @@ export default function Contests() {
           </figure>
         </div>
 
-        <div ref={grid} className="rv-kids mt-14 grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
+        {/* 10 плиток: 2 в ряд на телефоне, 5 на компьютере — ряды без «хвостов» */}
+        <div ref={grid} className="rv-kids mt-14 grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-5">
           {MEDIA.map((m) => {
             const src = `/contests/${m.src}`;
             return (
