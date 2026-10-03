@@ -10,8 +10,8 @@ export default function Founder() {
             <img
               src="/kasym-about.jpg"
               alt="Касым Амангельдин, основатель Qasym Barbershop"
-              width={361}
-              height={640}
+              width={840}
+              height={1260}
               loading="lazy"
               className="aspect-[4/5] w-full object-cover object-top"
             />
