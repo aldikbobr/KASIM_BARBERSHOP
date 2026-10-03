@@ -1,3 +1,4 @@
+import { MapPin } from 'lucide-react';
 import { SectionHead } from './SectionHead';
 import { SERVICES, PRICE_TIERS, PRICES_KIDS } from '@/data';
 
@@ -58,6 +59,12 @@ export default function Services() {
                 <p className="mt-1.5 text-[12.5px] leading-relaxed text-[var(--muted)] opacity-80 md:text-[13px]">
                   {s.desc}
                 </p>
+                {s.where && (
+                  <p className="mt-2 flex items-center gap-1.5 text-[11.5px] text-[var(--gold-soft)] opacity-90 md:text-[12px]">
+                    <MapPin size={12} aria-hidden="true" className="shrink-0" />
+                    {s.where}
+                  </p>
+                )}
 
                 {!s.prices ? (
                   <div className="mt-auto pt-4">
