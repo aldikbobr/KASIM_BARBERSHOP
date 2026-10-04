@@ -1,4 +1,3 @@
-import { useEffect, useRef } from 'react';
 import { Star } from 'lucide-react';
 import { RATING, TWOGIS_URL } from '@/data';
 
@@ -6,17 +5,10 @@ interface HeroProps {
   onBooking: () => void;
 }
 
-// Живое видео из филиала (IMG_9354: стрижка и борода опасной бритвой) вместо стокового фото.
-const VIDEO = { src: '/works/razor-shave.mp4', poster: '/works/razor-shave.jpg' };
+// Фото от заказчика (04.10.2026): барбер за работой, 1024×1536.
+const PHOTO = '/hero.jpg';
 
 export default function Hero({ onBooking }: HeroProps) {
-  const video = useRef<HTMLVideoElement>(null);
-
-  // При «уменьшить движение» видео стоит на первом кадре.
-  useEffect(() => {
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) video.current?.pause();
-  }, []);
-
   const splitTitle = (text: string) =>
     text.split('').map((char, i) => (
       <span
@@ -30,9 +22,9 @@ export default function Hero({ onBooking }: HeroProps) {
 
   return (
     <section id="top" className="relative min-h-screen overflow-hidden">
-      {/* Компьютер: фон — размытый кадр из того же видео, само видео — карточкой справа */}
+      {/* Компьютер: фон — размытое то же фото, само фото — карточкой справа */}
       <div className="absolute inset-0 hidden lg:block" aria-hidden="true">
-        <img src={VIDEO.poster} alt="" className="h-full w-full scale-110 object-cover opacity-40 blur-2xl" />
+        <img src={PHOTO} alt="" className="h-full w-full scale-110 object-cover opacity-40 blur-2xl" />
         <div className="absolute inset-0 bg-gradient-to-b from-[rgba(7,7,7,0.4)] via-[rgba(7,7,7,0.55)] to-[#070707]" />
         <div className="absolute inset-0 bg-gradient-to-r from-[rgba(7,7,7,0.85)] via-[rgba(7,7,7,0.4)] to-transparent" />
       </div>
@@ -92,21 +84,17 @@ export default function Hero({ onBooking }: HeroProps) {
             </div>
           </div>
 
-          {/* Одно видео на обе раскладки: на телефоне растянуто фоном на весь
+          {/* Одно фото на обе раскладки: на телефоне растянуто фоном на весь
               экран (absolute от блока выше), с компьютера — карточка справа. */}
-          <figure className="absolute inset-0 -z-10 m-0 lg:relative lg:inset-auto lg:z-auto lg:aspect-[9/16] lg:h-[min(74vh,680px)] lg:shrink-0 lg:overflow-hidden lg:rounded-[22px] lg:shadow-[0_30px_80px_rgba(0,0,0,0.65)] lg:ring-1 lg:ring-[rgba(212,175,55,0.25)]">
-            <video
-              ref={video}
-              src={VIDEO.src}
-              poster={VIDEO.poster}
-              aria-label="Барбер стрижёт клиента и оформляет бороду опасной бритвой"
-              autoPlay
-              muted
-              loop
-              playsInline
+          <figure className="absolute inset-0 -z-10 m-0 lg:relative lg:inset-auto lg:z-auto lg:aspect-[2/3] lg:h-[min(74vh,680px)] lg:shrink-0 lg:overflow-hidden lg:rounded-[22px] lg:shadow-[0_30px_80px_rgba(0,0,0,0.65)] lg:ring-1 lg:ring-[rgba(212,175,55,0.25)]">
+            <img
+              src={PHOTO}
+              alt="Барбер делает фейд клиенту"
+              width={1024}
+              height={1536}
               className="h-full w-full object-cover"
             />
-            {/* на телефоне затемняем видео под текстом */}
+            {/* на телефоне затемняем фото под текстом */}
             <div className="absolute inset-0 bg-gradient-to-b from-[rgba(7,7,7,0.6)] via-[rgba(7,7,7,0.55)] to-[#070707] lg:hidden" />
             <div className="absolute inset-0 bg-gradient-to-r from-[rgba(7,7,7,0.7)] to-transparent lg:hidden" />
           </figure>
