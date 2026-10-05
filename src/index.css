@@ -57,6 +57,14 @@
 }
 
 @layer components {
+  /* Ряд, который листается пальцем вбок, без полосы прокрутки */
+  .no-sb {
+    scrollbar-width: none;
+  }
+  .no-sb::-webkit-scrollbar {
+    display: none;
+  }
+
   .wrap {
     width: 100%;
     max-width: 1180px;
