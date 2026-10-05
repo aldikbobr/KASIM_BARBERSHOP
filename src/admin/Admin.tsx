@@ -135,9 +135,10 @@ interface AddInit {
 export default function Admin() {
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
-  const [tab, setTab] = useState<'schedule' | 'list' | 'stats' | 'help'>('schedule');
+  const [tab, setTab] = useState<'schedule' | 'list' | 'stats' | 'passwords' | 'help'>('schedule');
   const [newCount, setNewCount] = useState(0);
   const [addInit, setAddInit] = useState<AddInit | null>(null);
+  const [owner, setOwner] = useState(false); // личный вход Касыма — ему видна вкладка «Пароли»
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -147,6 +148,11 @@ export default function Admin() {
     const { data } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
     return () => data.subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!session) return setOwner(false);
+    supabase.rpc('crm_role').then(({ data }) => setOwner(data === 'owner'));
+  }, [session]);
 
   // Число новых заявок и звук — на любой вкладке.
   useEffect(() => {
@@ -185,12 +191,13 @@ export default function Admin() {
           <div className="font-display text-[16px] tracking-[0.2em] uppercase sm:text-[18px]">
             Qasym <span className="gold-text">CRM</span>
           </div>
-          <nav className="order-last -mx-1.5 flex w-full gap-0.5 text-[13px] min-[400px]:text-[14px] sm:order-none sm:mx-0 sm:w-auto sm:gap-1">
+          <nav className="no-sb order-last -mx-1.5 flex w-full gap-0.5 overflow-x-auto text-[13px] min-[400px]:text-[14px] sm:order-none sm:mx-0 sm:w-auto sm:gap-1">
             {(
               [
                 ['schedule', 'Расписание'],
                 ['list', 'Заявки'],
                 ['stats', 'Статистика'],
+                ...(owner ? ([['passwords', 'Пароли']] as const) : []),
                 ['help', 'Помощь'],
               ] as const
             ).map(([id, label]) => (
@@ -219,6 +226,7 @@ export default function Admin() {
         {tab === 'schedule' && <Schedule onAdd={setAddInit} />}
         {tab === 'list' && <Bookings newCount={newCount} onAdd={setAddInit} />}
         {tab === 'stats' && <Stats />}
+        {tab === 'passwords' && owner && <Passwords />}
         {tab === 'help' && <Help />}
       </main>
 
@@ -275,6 +283,13 @@ function Login() {
         <button disabled={busy} className="btn btn-gold mt-6 w-full">
           {busy ? 'Вход…' : 'Войти'}
         </button>
+        <details className="mt-4 text-[14px] text-[var(--muted)]">
+          <summary className="cursor-pointer text-center hover:text-white">Забыли пароль?</summary>
+          <p className="mt-3 leading-relaxed">
+            Пароль сотрудников восстанавливает только Касым. Позвоните ему — он войдёт в CRM под своим логином и задаст новый пароль на
+            вкладке «Пароли».
+          </p>
+        </details>
       </form>
     </div>
   );
@@ -1031,6 +1046,75 @@ function StatTable({ title, items }: { title: string; items: [string, { total: n
   );
 }
 
+// Только для Касыма: новый пароль общего входа сотрудников и смена своего пароля.
+function Passwords() {
+  const [staffPass, setStaffPass] = useState('');
+  const [staffMsg, setStaffMsg] = useState('');
+  const [myPass, setMyPass] = useState('');
+  const [myPass2, setMyPass2] = useState('');
+  const [myMsg, setMyMsg] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const saveStaff = async () => {
+    if (staffPass.length < 8) return setStaffMsg('Пароль должен быть не короче 8 символов');
+    if (!confirm('Поставить новый пароль? Все сотрудники выйдут из CRM и войдут уже с новым паролем.')) return;
+    setBusy(true);
+    const { error } = await supabase.rpc('set_staff_password', { p_password: staffPass });
+    setBusy(false);
+    setStaffMsg(error ? 'Не сохранилось. Проверьте интернет и попробуйте ещё раз.' : `Готово. Новый пароль сотрудников: ${staffPass} — передайте его администраторам.`);
+    if (!error) setStaffPass('');
+  };
+
+  const saveMine = async () => {
+    if (myPass.length < 8) return setMyMsg('Пароль должен быть не короче 8 символов');
+    if (myPass !== myPass2) return setMyMsg('Пароли не совпадают');
+    setBusy(true);
+    const { error } = await supabase.auth.updateUser({ password: myPass });
+    setBusy(false);
+    setMyMsg(error ? 'Не сохранилось. Возможно, новый пароль совпадает со старым.' : 'Готово. Ваш пароль изменён.');
+    if (!error) {
+      setMyPass('');
+      setMyPass2('');
+    }
+  };
+
+  const field = 'mt-1.5 w-full rounded-xl border border-[var(--border)] bg-black/40 px-3 py-2 text-[16px] focus:border-[var(--gold)] focus:outline-none sm:py-2.5 sm:text-[15px]';
+  const box = 'rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 sm:p-5';
+
+  return (
+    <div className="grid max-w-xl gap-4">
+      <section className={box}>
+        <h2 className="font-display text-[18px] tracking-[0.06em] uppercase">Пароль сотрудников</h2>
+        <p className="mt-1.5 text-[14px] leading-relaxed text-[var(--muted)]">
+          Если администратор забыл пароль или от вас ушёл сотрудник — задайте новый. Все устройства сотрудников выйдут из CRM, войти можно
+          будет только с новым паролем.
+        </p>
+        <input
+          value={staffPass}
+          onChange={(e) => setStaffPass(e.target.value)}
+          placeholder="Новый пароль, от 8 символов"
+          autoComplete="off"
+          className={field}
+        />
+        {staffMsg && <p className="mt-2 text-[14px] text-[var(--gold-soft)]">{staffMsg}</p>}
+        <button onClick={saveStaff} disabled={busy} className="btn btn-gold mt-3 !h-10">
+          Сохранить пароль сотрудников
+        </button>
+      </section>
+
+      <section className={box}>
+        <h2 className="font-display text-[18px] tracking-[0.06em] uppercase">Мой пароль</h2>
+        <input type="password" value={myPass} onChange={(e) => setMyPass(e.target.value)} placeholder="Новый пароль" autoComplete="new-password" className={field} />
+        <input type="password" value={myPass2} onChange={(e) => setMyPass2(e.target.value)} placeholder="Ещё раз" autoComplete="new-password" className={field} />
+        {myMsg && <p className="mt-2 text-[14px] text-[var(--gold-soft)]">{myMsg}</p>}
+        <button onClick={saveMine} disabled={busy} className="btn btn-ghost mt-3 !h-10">
+          Сменить мой пароль
+        </button>
+      </section>
+    </div>
+  );
+}
+
 function Help() {
   const steps = [
     ['Расписание', 'Первая вкладка. Выберите филиал и день — видно всех мастеров и всё время: цветные ячейки заняты (нажмите, чтобы открыть клиента), «свободно» — можно записывать. Под каждым мастером написано, сколько у него свободных окошек. Нажмите «свободно» — откроется запись с этим мастером и временем.'],
@@ -1042,6 +1126,7 @@ function Help() {
     ['Заметки', 'В строке под заявкой можно написать что угодно: пожелания клиента, предоплата и т. п. Сохраняется само, когда вы нажмёте в другое место.'],
     ['Статистика', 'Выберите период кнопками или поставьте свои даты «с … по …». «Скачать (Excel)» сохраняет цифры файлом.'],
     ['Поиск', 'Найти клиента по имени или номеру телефона можно в строке поиска на вкладке «Заявки» — ищет по всем датам.'],
+    ['Забыли пароль', 'Новый пароль сотрудников задаёт только Касым: он входит под своим логином и открывает вкладку «Пароли». После смены все сотрудники выходят из CRM и входят с новым паролем.'],
   ];
   return (
     <div className="max-w-2xl">
