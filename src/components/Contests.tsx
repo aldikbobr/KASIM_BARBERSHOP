@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
 import { SectionHead } from './SectionHead';
+import { MediaGrid } from './MediaGrid';
 
 // Фото команды и титулы — с личного сайта Касыма (репозиторий kasimm).
 const TITLES = ['Чемпион Азии', 'Чемпион Европы'];
@@ -16,25 +16,6 @@ const MEDIA = [
 ];
 
 export default function Contests() {
-  const grid = useRef<HTMLDivElement>(null);
-
-  // Ролик играет, только пока виден; при «уменьшить движение» остаются обложки.
-  useEffect(() => {
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          const v = e.target as HTMLVideoElement;
-          if (e.isIntersecting) v.play().catch(() => {});
-          else v.pause();
-        }
-      },
-      { threshold: 0.25 },
-    );
-    grid.current?.querySelectorAll('video').forEach((v) => io.observe(v));
-    return () => io.disconnect();
-  }, []);
-
   return (
     <section id="sorevnovaniya" className="sec border-t border-[var(--border)]">
       <div className="wrap">
@@ -83,37 +64,7 @@ export default function Contests() {
         </div>
 
         {/* 6 плиток: 2 в ряд на телефоне, 6 на компьютере — ряды без «хвостов» */}
-        <div ref={grid} className="rv-kids mt-14 grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-6">
-          {MEDIA.map((m) => {
-            const src = `/contests/${m.src}`;
-            return (
-              <div
-                key={m.src}
-                className="group relative aspect-[3/4] overflow-hidden rounded-[14px] ring-1 ring-white/[0.08]"
-              >
-                {m.src.endsWith('.mp4') ? (
-                  <video
-                    src={src}
-                    poster={src.replace('.mp4', '.jpg')}
-                    aria-label={m.alt}
-                    muted
-                    loop
-                    playsInline
-                    preload="none"
-                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
-                  />
-                ) : (
-                  <img
-                    src={src}
-                    alt={m.alt}
-                    loading="lazy"
-                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
-                  />
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <MediaGrid dir="contests" items={MEDIA} className="mt-14 lg:grid-cols-6" />
       </div>
     </section>
   );
