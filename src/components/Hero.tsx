@@ -30,10 +30,11 @@ export default function Hero({ onBooking }: HeroProps) {
       </div>
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(58%_46%_at_26%_40%,rgba(212,175,55,0.2)_0%,transparent_68%)]" />
 
-      <div className="relative z-10 flex min-h-screen flex-col justify-center">
-        <div className="wrap flex items-center justify-between gap-12 pt-20 pb-24">
+      {/* Телефон: текст внизу экрана, герб только в шапке — иначе они закрывают лицо Касыма на фото. */}
+      <div className="relative z-10 flex min-h-screen flex-col justify-end lg:justify-center">
+        <div className="wrap flex items-center justify-between gap-12 pt-20 pb-28 lg:pb-24">
           <div>
-            <div className="fade-in-up" style={{ animationDelay: '0.05s' }}>
+            <div className="fade-in-up hidden lg:block" style={{ animationDelay: '0.05s' }}>
               <img
                 src="/crest.png"
                 alt="Герб Qasym Barbershop"

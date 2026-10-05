@@ -22,14 +22,7 @@ export default function Locations() {
               key={l.name}
               className="flex flex-col gap-1.5 rounded-[14px] border border-[var(--border)] bg-[var(--card)] p-7 transition-colors duration-300 hover:border-[var(--gold)] hover:border-opacity-30 hover:bg-[#141414]"
             >
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="font-display text-[26px] font-medium tracking-[0.04em] uppercase">{l.name}</h3>
-                {l.flagship && (
-                  <span className="rounded-full border border-[rgba(212,175,55,0.35)] px-3 py-1 text-[11px] tracking-[0.18em] uppercase text-[var(--gold)]">
-                    Флагман
-                  </span>
-                )}
-              </div>
+              <h3 className="font-display text-[26px] font-medium tracking-[0.04em] uppercase">{l.name}</h3>
               <p className="text-[14.5px] text-[var(--muted)]">
                 {l.address}
                 {l.name === 'ДСР' && ', мкр. Жас Оркен'}
