@@ -1,19 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, Check, ChevronLeft, ChevronRight, Calendar, Clock, User, MessageCircle } from 'lucide-react';
-import { LOCATIONS, MASTER_PHOTOS } from '@/data';
+import { LOCATIONS, MASTER_PHOTOS, TIME_SLOTS } from '@/data';
 import { busySlots, saveBooking } from '@/lib/db';
 
 interface BookingModalProps {
   open: boolean;
   onClose: () => void;
 }
-
-const TIME_SLOTS = [
-  '10:00', '10:30', '11:00', '11:30', '12:00', '12:30',
-  '13:00', '13:30', '14:00', '14:30', '15:00', '15:30',
-  '16:00', '16:30', '17:00', '17:30', '18:00', '18:30',
-  '19:00', '19:30',
-];
 
 const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
 // MONTHS — для шапки календаря («Сентябрь 2026»), MONTHS_OF — для даты («21 сентября»)

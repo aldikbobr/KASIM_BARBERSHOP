@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createClient, type Session } from '@supabase/supabase-js';
-import { Phone, MessageCircle, LogOut, Search, RefreshCw } from 'lucide-react';
-import { LOCATIONS } from '@/data';
+import { Phone, MessageCircle, LogOut, Search, RefreshCw, Plus, X } from 'lucide-react';
+import { LOCATIONS, TIME_SLOTS } from '@/data';
 import { SUPABASE_URL, SUPABASE_KEY } from '@/lib/db';
 
 // CRM открывается по адресу /admin. Библиотека Supabase грузится только здесь,
@@ -20,6 +20,7 @@ interface Booking {
   phone: string;
   status: Status;
   note: string;
+  source: 'site' | 'admin';
 }
 
 const STATUS: Record<Status, { label: string; cls: string }> = {
@@ -218,6 +219,7 @@ function Bookings() {
   const [newCount, setNewCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [adding, setAdding] = useState(false);
 
   const load = useCallback(async () => {
     const s = search.replace(/[,()%*]/g, '').trim();
@@ -334,7 +336,21 @@ function Bookings() {
         <button onClick={load} className="flex items-center gap-1.5 rounded-xl border border-[var(--border)] px-3 py-2 text-[14px] text-[var(--muted)] hover:text-white">
           <RefreshCw size={14} /> Обновить
         </button>
+        <button onClick={() => setAdding(true)} className="btn btn-gold !h-10">
+          <Plus size={16} /> Добавить запись
+        </button>
       </div>
+
+      {adding && (
+        <AddBooking
+          defaultBranch={branch === 'all' ? '' : branch}
+          onClose={() => setAdding(false)}
+          onSaved={() => {
+            setAdding(false);
+            load();
+          }}
+        />
+      )}
 
       {error && <p className="mt-6 text-rose-400">{error}</p>}
       {!loading && !error && rows.length === 0 && <p className="mt-10 text-center text-[var(--muted)]">Заявок нет</p>}
@@ -378,17 +394,23 @@ function Card({ b, onUpdate }: { b: Booking; onUpdate: (b: Booking, p: Partial<B
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <a href={`tel:${b.phone.replace(/[^\d+]/g, '')}`} className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-[14px] hover:border-white/30">
-          <Phone size={14} /> {b.phone}
-        </a>
-        <a
-          href={`https://wa.me/${waNumber(b.phone)}`}
-          target="_blank"
-          rel="noopener"
-          className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-[14px] text-emerald-300 hover:border-emerald-400/50"
-        >
-          <MessageCircle size={14} /> WhatsApp
-        </a>
+        {b.phone ? (
+          <>
+            <a href={`tel:${b.phone.replace(/[^\d+]/g, '')}`} className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-[14px] hover:border-white/30">
+              <Phone size={14} /> {b.phone}
+            </a>
+            <a
+              href={`https://wa.me/${waNumber(b.phone)}`}
+              target="_blank"
+              rel="noopener"
+              className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-[14px] text-emerald-300 hover:border-emerald-400/50"
+            >
+              <MessageCircle size={14} /> WhatsApp
+            </a>
+          </>
+        ) : (
+          <span className="text-[14px] text-[var(--muted)]">Телефон не указан</span>
+        )}
         <div className="ml-auto flex flex-wrap gap-2">
           {NEXT[b.status].map((s) => (
             <button
@@ -410,9 +432,168 @@ function Card({ b, onUpdate }: { b: Booking; onUpdate: (b: Booking, p: Partial<B
         className="mt-3 w-full rounded-lg border border-transparent bg-black/30 px-3 py-2 text-[14px] text-white/85 placeholder:text-white/25 focus:border-[var(--border)] focus:outline-none"
       />
       <div className="mt-1.5 text-[12px] text-white/30">
-        Заявка с сайта: {new Date(b.created_at).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
+        {b.source === 'admin' ? 'Добавил администратор' : 'Заявка с сайта'}:{' '}
+        {new Date(b.created_at).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
       </div>
     </article>
+  );
+}
+
+// Запись по телефону или клиент пришёл без записи. Время этой записи сразу
+// становится занятым и на сайте.
+function AddBooking({ defaultBranch, onClose, onSaved }: { defaultBranch: string; onClose: () => void; onSaved: () => void }) {
+  const [branch, setBranch] = useState(defaultBranch);
+  const [barber, setBarber] = useState('');
+  const [date, setDate] = useState(dayOffset(0));
+  const [time, setTime] = useState('');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [note, setNote] = useState('');
+  const [walkIn, setWalkIn] = useState(false);
+  const [busy, setBusy] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const masters = LOCATIONS.find((l) => l.name === branch)?.masters ?? [];
+
+  useEffect(() => {
+    setTime('');
+    if (!branch || !barber || barber === 'Любой' || !date) return setBusy([]);
+    supabase.rpc('busy_slots', { p_location: branch, p_date: date }).then(({ data }) => {
+      setBusy(((data ?? []) as { barber: string; time: string }[]).filter((r) => r.barber === barber).map((r) => r.time));
+    });
+  }, [branch, barber, date]);
+
+  const ready = branch && barber && date && time && name.trim();
+
+  const save = async () => {
+    if (!ready) return;
+    setSaving(true);
+    setError('');
+    const { error } = await supabase.from('bookings').insert({
+      location: branch,
+      barber,
+      date,
+      time,
+      name: name.trim(),
+      phone: phone.trim(),
+      note: note.trim(),
+      source: 'admin',
+      status: walkIn ? 'done' : 'confirmed',
+    });
+    setSaving(false);
+    if (!error) return onSaved();
+    setError(error.code === '23505' ? 'Это время у мастера уже занято — выберите другое.' : 'Не сохранилось. Проверьте интернет и попробуйте ещё раз.');
+  };
+
+  const field = 'mt-1.5 w-full rounded-xl border border-[var(--border)] bg-black/40 px-3 py-2.5 text-[15px] focus:border-[var(--gold)] focus:outline-none';
+  const label = 'block text-[12px] tracking-[0.1em] uppercase text-[var(--muted)]';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/80 p-4 sm:items-center">
+      <div className="w-full max-w-lg rounded-2xl border border-[var(--border)] bg-[#0e0e0e] p-5 sm:p-6">
+        <div className="flex items-center justify-between">
+          <h2 className="font-display text-[20px] tracking-[0.06em] uppercase">Новая запись</h2>
+          <button onClick={onClose} aria-label="Закрыть" className="text-[var(--muted)] hover:text-white">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-4">
+          <div>
+            <span className={label}>Филиал</span>
+            <div className="mt-1.5 flex flex-wrap gap-2">
+              {LOCATIONS.map((l) => (
+                <button
+                  key={l.name}
+                  onClick={() => {
+                    setBranch(l.name);
+                    setBarber('');
+                  }}
+                  className={`rounded-lg border px-3 py-2 text-[14px] ${branch === l.name ? 'border-[var(--gold)] bg-[var(--gold)]/10' : 'border-[var(--border)] text-[var(--muted)]'}`}
+                >
+                  {l.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <label className={label}>
+              Мастер
+              <select value={barber} onChange={(e) => setBarber(e.target.value)} className={field} disabled={!branch}>
+                <option value="">—</option>
+                <option value="Любой">Любой</option>
+                {masters.map((m) => (
+                  <option key={m}>{m}</option>
+                ))}
+              </select>
+            </label>
+            <label className={label}>
+              Дата
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={field} />
+            </label>
+          </div>
+
+          <div>
+            <span className={label}>Время</span>
+            <div className="mt-1.5 grid grid-cols-5 gap-1.5">
+              {TIME_SLOTS.map((s) => {
+                const taken = busy.includes(s);
+                return (
+                  <button
+                    key={s}
+                    disabled={taken}
+                    onClick={() => setTime(s)}
+                    className={`rounded-lg border py-2 text-[13px] ${
+                      taken
+                        ? 'cursor-not-allowed border-transparent text-white/20 line-through'
+                        : time === s
+                          ? 'border-[var(--gold)] bg-[var(--gold)]/10'
+                          : 'border-[var(--border)] text-[var(--muted)]'
+                    }`}
+                  >
+                    {s}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <label className={label}>
+              Имя клиента
+              <input value={name} maxLength={60} onChange={(e) => setName(e.target.value)} className={field} />
+            </label>
+            <label className={label}>
+              Телефон (если есть)
+              <input type="tel" value={phone} maxLength={25} onChange={(e) => setPhone(e.target.value)} placeholder="+7" className={field} />
+            </label>
+          </div>
+
+          <label className={label}>
+            Заметка
+            <input value={note} onChange={(e) => setNote(e.target.value)} className={field} />
+          </label>
+
+          <label className="flex items-center gap-2.5 text-[14px]">
+            <input type="checkbox" checked={walkIn} onChange={(e) => setWalkIn(e.target.checked)} className="h-4 w-4 accent-[#d4af37]" />
+            Клиент уже здесь (пришёл без записи) — сразу отметить «Пришёл»
+          </label>
+        </div>
+
+        {error && <p className="mt-4 text-[14px] text-rose-400">{error}</p>}
+
+        <div className="mt-5 flex gap-2">
+          <button onClick={save} disabled={!ready || saving} className={`btn ${ready && !saving ? 'btn-gold' : 'btn-ghost opacity-40'}`}>
+            {saving ? 'Сохраняем…' : 'Сохранить'}
+          </button>
+          <button onClick={onClose} className="btn btn-ghost">
+            Отмена
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -523,7 +704,8 @@ function StatTable({ title, items }: { title: string; items: [string, { total: n
 
 function Help() {
   const steps = [
-    ['Новая заявка', 'Клиент записался на сайте — заявка появляется сама, со звуком, на вкладке «Сегодня» или в «Новые». Обычно клиент ещё и пишет в WhatsApp филиала.'],
+    ['Новая заявка', 'Клиент записался на сайте — заявка появляется сама, со звуком, на вкладке «Сегодня» или в «Новые», и приходит сообщением в Telegram-группу. Обычно клиент ещё и пишет в WhatsApp филиала.'],
+    ['Запись по телефону', 'Клиент позвонил или написал — нажмите «Добавить запись», выберите филиал, мастера, дату и время. Это время сразу станет занятым на сайте. Пришёл без записи — поставьте галочку «Клиент уже здесь».'],
     ['Подтвердить', 'Свяжитесь с клиентом (кнопки «Телефон» и «WhatsApp» в карточке) и нажмите «Подтвердить». Если клиент передумал — «Отменить».'],
     ['После визита', 'Клиент пришёл — «Пришёл». Не пришёл и не предупредил — «Не пришёл». Это нужно для статистики.'],
     ['Ошиблись кнопкой', 'Нажмите «Вернуть» — запись снова станет подтверждённой.'],
