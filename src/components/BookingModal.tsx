@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, Check, ChevronLeft, ChevronRight, Calendar, Clock, User, MessageCircle } from 'lucide-react';
 import { LOCATIONS, MASTER_PHOTOS } from '@/data';
+import { busySlots, saveBooking } from '@/lib/db';
 
 interface BookingModalProps {
   open: boolean;
@@ -19,6 +20,10 @@ const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', '�
 const MONTHS_OF = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
+// Не toISOString(): он считает в UTC и в нашем поясе сдвигает дату на день назад
+const isoDate = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 export default function BookingModal({ open, onClose }: BookingModalProps) {
   const [step, setStep] = useState(0);
   const [barber, setBarber] = useState<string>('');
@@ -29,6 +34,11 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [success, setSuccess] = useState(false);
+  // заявка дошла до CRM; false — база недоступна, остаётся только WhatsApp
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [busy, setBusy] = useState<Record<string, string[]>>({});
+  const [timeError, setTimeError] = useState('');
 
   const reset = useCallback(() => {
     setStep(0);
@@ -40,6 +50,10 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
     setName('');
     setPhone('');
     setSuccess(false);
+    setSaved(false);
+    setSaving(false);
+    setBusy({});
+    setTimeError('');
   }, []);
 
   useEffect(() => {
@@ -55,15 +69,47 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
     return () => { document.body.style.overflow = ''; };
   }, [open]);
 
+  // Занятое время подгружаем, когда клиент дошёл до выбора времени
+  const dateKey = selectedDate ? isoDate(selectedDate) : '';
+  useEffect(() => {
+    if (!open || step !== 3 || !location || !dateKey) return;
+    let alive = true;
+    busySlots(location, dateKey).then((b) => alive && setBusy(b));
+    return () => { alive = false; };
+  }, [open, step, location, dateKey]);
+
   if (!open) return null;
 
   // Мастера выбранного филиала: список зависит от филиала, поэтому филиал — первый шаг
   const masters = LOCATIONS.find((l) => l.name === location)?.masters ?? [];
 
-  // Заявка уходит только в WhatsApp филиала. Раньше она ещё писалась в Supabase,
-  // но проект Bolt удалён (DNS не резолвится, 02.10.2026) и запись падала с ошибкой.
-  const handleSubmit = () => {
+  // Слот недоступен: у мастера уже есть запись (для «Любого» — заняты все мастера)
+  // или время сегодня уже прошло.
+  const slotTaken = (slot: string) => {
+    const takenBy = (m: string) => busy[m]?.includes(slot);
+    if (barber === 'Любой' ? masters.length > 0 && masters.every(takenBy) : takenBy(barber)) return true;
+    if (selectedDate && isToday(selectedDate)) {
+      const now = new Date();
+      const [h, m] = slot.split(':').map(Number);
+      return h * 60 + m <= now.getHours() * 60 + now.getMinutes();
+    }
+    return false;
+  };
+
+  // Заявка пишется в CRM (Supabase) и дублируется клиентом в WhatsApp филиала.
+  // База недоступна — не теряем клиента: показываем тот же WhatsApp.
+  const handleSubmit = async () => {
     if (!barber || !location || !selectedDate || !time || !name || !phone) return;
+    setSaving(true);
+    const res = await saveBooking({ location, barber, date: isoDate(selectedDate), time, name: name.trim(), phone: phone.trim() });
+    setSaving(false);
+    if (res === 'taken') {
+      setTime('');
+      setTimeError('Это время только что заняли — выберите другое.');
+      setStep(3);
+      return;
+    }
+    setSaved(res === 'ok');
     setSuccess(true);
   };
 
@@ -71,8 +117,8 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
     if (step === 0) return location !== '';
     if (step === 1) return barber !== '';
     if (step === 2) return selectedDate !== null;
-    if (step === 3) return time !== '';
-    if (step === 4) return name.trim() !== '' && phone.trim() !== '';
+    if (step === 3) return time !== '' && !slotTaken(time);
+    if (step === 4) return name.trim() !== '' && phone.replace(/\D/g, '').length >= 10;
     return false;
   };
 
@@ -155,10 +201,11 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--gold)]/10">
               <MessageCircle size={32} className="text-[var(--gold)]" />
             </div>
-            <h3 className="font-display text-2xl font-medium uppercase">Остался один шаг</h3>
+            <h3 className="font-display text-2xl font-medium uppercase">{saved ? 'Заявка принята' : 'Остался один шаг'}</h3>
             <p className="max-w-sm text-[15px] leading-relaxed text-[var(--muted)]">
-              Нажмите кнопку — откроется WhatsApp филиала с готовым текстом.
-              Отправьте его, и администратор подтвердит запись.
+              {saved
+                ? 'Время за вами. Администратор свяжется для подтверждения — а быстрее всего написать в WhatsApp филиала, текст уже готов.'
+                : 'Нажмите кнопку — откроется WhatsApp филиала с готовым текстом. Отправьте его, и администратор подтвердит запись.'}
             </p>
             <div className="mt-2 rounded-xl border border-[var(--border)] bg-black/30 px-5 py-4 text-left text-sm">
               <div className="flex gap-2"><span className="text-[var(--muted)]">Филиал:</span><span className="text-white">{location}</span></div>
@@ -322,21 +369,32 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
               {step === 3 && (
                 <div className="fade-in-up">
                   <div className="eyebrow"><Clock size={14} /> Выберите время</div>
+                  {timeError && <p className="mb-3 text-[14px] text-amber-300">{timeError}</p>}
                   <div className="grid grid-cols-4 gap-2">
-                    {TIME_SLOTS.map((slot) => (
-                      <button
-                        key={slot}
-                        onClick={() => setTime(slot)}
-                        className={`rounded-lg border py-2.5 text-sm transition-all ${
-                          time === slot
-                            ? 'border-[var(--gold)] bg-[var(--gold)]/5 text-white'
-                            : 'border-[var(--border)] text-[var(--muted)] hover:border-white/20 hover:text-white'
-                        }`}
-                      >
-                        {slot}
-                      </button>
-                    ))}
+                    {TIME_SLOTS.map((slot) => {
+                      const taken = slotTaken(slot);
+                      return (
+                        <button
+                          key={slot}
+                          disabled={taken}
+                          onClick={() => {
+                            setTime(slot);
+                            setTimeError('');
+                          }}
+                          className={`rounded-lg border py-2.5 text-sm transition-all ${
+                            taken
+                              ? 'cursor-not-allowed border-transparent text-white/15 line-through'
+                              : time === slot
+                                ? 'border-[var(--gold)] bg-[var(--gold)]/5 text-white'
+                                : 'border-[var(--border)] text-[var(--muted)] hover:border-white/20 hover:text-white'
+                          }`}
+                        >
+                          {slot}
+                        </button>
+                      );
+                    })}
                   </div>
+                  <p className="mt-3 text-[12px] text-[var(--muted)]">Зачёркнутое время уже занято.</p>
                 </div>
               )}
 
@@ -351,6 +409,7 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
                         id="booking-name"
                         type="text"
                         value={name}
+                        maxLength={60}
                         onChange={(e) => setName(e.target.value)}
                         placeholder="Как вас зовут"
                         className="w-full rounded-xl border border-[var(--border)] bg-black/30 px-4 py-3 text-[15px] text-white placeholder:text-white/30 transition-colors focus:border-[var(--gold)] focus:outline-none"
@@ -362,6 +421,7 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
                         id="booking-phone"
                         type="tel"
                         value={phone}
+                        maxLength={25}
                         onChange={(e) => setPhone(e.target.value)}
                         placeholder="+7 ___ ___ __ __"
                         className="w-full rounded-xl border border-[var(--border)] bg-black/30 px-4 py-3 text-[15px] text-white placeholder:text-white/30 transition-colors focus:border-[var(--gold)] focus:outline-none"
@@ -404,10 +464,10 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
               ) : (
                 <button
                   onClick={handleSubmit}
-                  disabled={!canProceed()}
-                  className={`btn ${canProceed() ? 'btn-gold' : 'btn-ghost opacity-40'}`}
+                  disabled={!canProceed() || saving}
+                  className={`btn ${canProceed() && !saving ? 'btn-gold' : 'btn-ghost opacity-40'}`}
                 >
-                  Записаться
+                  {saving ? 'Отправляем…' : 'Записаться'}
                 </button>
               )}
             </div>
