@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createClient, type Session } from '@supabase/supabase-js';
 import { Phone, MessageCircle, LogOut, Search, RefreshCw, Plus, X } from 'lucide-react';
-import { LOCATIONS, TIME_SLOTS } from '@/data';
+import { LOCATIONS, MASTER_PHOTOS, TIME_SLOTS } from '@/data';
 import { SUPABASE_URL, SUPABASE_KEY } from '@/lib/db';
 
 // CRM открывается по адресу /admin. Библиотека Supabase грузится только здесь,
@@ -220,6 +220,7 @@ function Bookings() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [adding, setAdding] = useState(false);
+  const [master, setMaster] = useState(''); // '' — все мастера
 
   const load = useCallback(async () => {
     const s = search.replace(/[,()%*]/g, '').trim();
@@ -280,9 +281,18 @@ function Bookings() {
     }
   };
 
+  // Вкладки мастеров: мастера выбранного филиала (или всех), плюс «Любой», если такие заявки есть.
+  // Фильтр по мастеру — на месте, поэтому на каждой вкладке видно число записей.
+  const masterTabs = [
+    ...(branch === 'all' ? LOCATIONS.flatMap((l) => l.masters) : (LOCATIONS.find((l) => l.name === branch)?.masters ?? [])),
+    ...(rows.some((r) => r.barber === 'Любой') ? ['Любой'] : []),
+  ];
+  const countBy = (m: string) => rows.filter((r) => r.barber === m).length;
+  const shown = master ? rows.filter((r) => r.barber === master) : rows;
+
   // группируем по дате, чтобы был заголовок дня
   const groups: [string, Booking[]][] = [];
-  for (const r of rows) {
+  for (const r of shown) {
     const last = groups[groups.length - 1];
     if (last && last[0] === r.date) last[1].push(r);
     else groups.push([r.date, [r]]);
@@ -313,7 +323,10 @@ function Bookings() {
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <select
           value={branch}
-          onChange={(e) => setBranch(e.target.value)}
+          onChange={(e) => {
+            setBranch(e.target.value);
+            setMaster('');
+          }}
           className="rounded-xl border border-[var(--border)] bg-black/40 px-3 py-2 text-[14px]"
           aria-label="Филиал"
         >
@@ -341,6 +354,28 @@ function Bookings() {
         </button>
       </div>
 
+      <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1" role="tablist" aria-label="Мастера">
+        {['', ...masterTabs].map((m) => {
+          const active = master === m;
+          const n = m ? countBy(m) : rows.length;
+          return (
+            <button
+              key={m || 'all'}
+              role="tab"
+              aria-selected={active}
+              onClick={() => setMaster(m)}
+              className={`flex shrink-0 items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-[14px] ${
+                active ? 'border-[var(--gold)] bg-[var(--gold)]/10 text-white' : 'border-[var(--border)] text-[var(--muted)] hover:text-white'
+              } ${!m ? 'pl-3' : ''}`}
+            >
+              {m && MASTER_PHOTOS[m] && <img src={MASTER_PHOTOS[m]} alt="" className="h-7 w-7 rounded-full object-cover" />}
+              {m || 'Все мастера'}
+              <span className={`text-[12px] ${n ? 'text-[var(--gold-soft)]' : 'opacity-40'}`}>{n}</span>
+            </button>
+          );
+        })}
+      </div>
+
       {adding && (
         <AddBooking
           defaultBranch={branch === 'all' ? '' : branch}
@@ -353,7 +388,9 @@ function Bookings() {
       )}
 
       {error && <p className="mt-6 text-rose-400">{error}</p>}
-      {!loading && !error && rows.length === 0 && <p className="mt-10 text-center text-[var(--muted)]">Заявок нет</p>}
+      {!loading && !error && shown.length === 0 && (
+        <p className="mt-10 text-center text-[var(--muted)]">{master ? `У мастера ${master} записей нет` : 'Заявок нет'}</p>
+      )}
 
       {groups.map(([date, list]) => (
         <section key={date} className="mt-7">
