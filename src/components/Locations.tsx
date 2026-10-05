@@ -32,7 +32,7 @@ export default function Locations() {
               </div>
               <p className="text-[14.5px] text-[var(--muted)]">
                 {l.address}
-                {l.flagship && ', мкр. Жас Оркен'}
+                {l.name === 'ДСР' && ', мкр. Жас Оркен'}
               </p>
               <p className="text-[13px] tracking-[0.06em] text-[var(--muted)] opacity-70">Ежедневно 10:00—20:00</p>
               <a href={l.wa} target="_blank" rel="noopener" className="btn btn-ghost mt-5 self-start">

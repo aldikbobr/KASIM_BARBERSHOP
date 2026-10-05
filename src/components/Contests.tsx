@@ -7,16 +7,12 @@ const TITLES = ['Чемпион Азии', 'Чемпион Европы'];
 // Материалы с чемпионатов от заказчика (03.10.2026), /public/contests.
 // Видео без звука, 540px по ширине; у видео рядом кадр-обложка с тем же именем.
 const MEDIA = [
-  { src: 'p-trophy.jpg', alt: 'Мастер Qasym с кубком за первое место и медалью' },
   { src: 'v-stage.mp4', alt: 'Мастер работает с моделью на чемпионате' },
   { src: 'p-contest.jpg', alt: 'Укладка модели во время конкурса' },
   { src: 'v-hall.mp4', alt: 'Конкурсный зал чемпионата по барберингу' },
   { src: 'v-barber.mp4', alt: 'Барбер стрижёт модель на соревновании' },
   { src: 'v-camera.mp4', alt: 'Конкурсанты за работой под камерами' },
   { src: 'v-arena.mp4', alt: 'Зал соревнований с рядами зеркал' },
-  { src: 'v-design-2.mp4', alt: 'Фейд с рисунком бритвой на виске' },
-  { src: 'v-curly.mp4', alt: 'Кудрявая детская стрижка' },
-  { src: 'p-neon.jpg', alt: 'Неоновая вывеска Kasym Barbershop, основан в 2020' },
 ];
 
 export default function Contests() {
@@ -86,8 +82,8 @@ export default function Contests() {
           </figure>
         </div>
 
-        {/* 10 плиток: 2 в ряд на телефоне, 5 на компьютере — ряды без «хвостов» */}
-        <div ref={grid} className="rv-kids mt-14 grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-5">
+        {/* 6 плиток: 2 в ряд на телефоне, 6 на компьютере — ряды без «хвостов» */}
+        <div ref={grid} className="rv-kids mt-14 grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-6">
           {MEDIA.map((m) => {
             const src = `/contests/${m.src}`;
             return (
