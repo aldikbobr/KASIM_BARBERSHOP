@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createClient, type Session } from '@supabase/supabase-js';
 import { Phone, MessageCircle, LogOut, Search, RefreshCw, Plus, X } from 'lucide-react';
 import { LOCATIONS, MASTER_PHOTOS, TIME_SLOTS } from '@/data';
@@ -81,6 +81,19 @@ const waNumber = (phone: string) => {
   return d.length === 11 && d.startsWith('8') ? `7${d.slice(1)}` : d.length === 10 ? `7${d}` : d;
 };
 
+// Перезагрузить данные при любом изменении заявок (новая с сайта, правка другого администратора).
+function useLiveReload(name: string, reload: () => void) {
+  useEffect(() => {
+    const ch = supabase
+      .channel(name)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => reload())
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [name, reload]);
+}
+
 // Короткий сигнал о новой заявке
 function beep() {
   try {
@@ -98,13 +111,22 @@ function beep() {
   }
 }
 
+// Что подставить в форму «Добавить запись» (из расписания — мастер, дата и время).
+interface AddInit {
+  branch?: string;
+  barber?: string;
+  date?: string;
+  time?: string;
+}
+
 export default function Admin() {
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
-  const [tab, setTab] = useState<'list' | 'stats' | 'help'>('list');
+  const [tab, setTab] = useState<'schedule' | 'list' | 'stats' | 'help'>('schedule');
+  const [newCount, setNewCount] = useState(0);
+  const [addInit, setAddInit] = useState<AddInit | null>(null);
 
   useEffect(() => {
-    document.title = 'Qasym CRM';
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setReady(true);
@@ -112,6 +134,32 @@ export default function Admin() {
     const { data } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
     return () => data.subscription.unsubscribe();
   }, []);
+
+  // Число новых заявок и звук — на любой вкладке.
+  useEffect(() => {
+    if (!session) return;
+    const refresh = () =>
+      supabase
+        .from('bookings')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'new')
+        .then(({ count }) => setNewCount(count ?? 0));
+    refresh();
+    const ch = supabase
+      .channel('crm-new')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, (p) => {
+        if (p.eventType === 'INSERT' && (p.new as Booking).source === 'site') beep();
+        refresh();
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [session]);
+
+  useEffect(() => {
+    document.title = newCount ? `(${newCount}) Qasym CRM` : 'Qasym CRM';
+  }, [newCount]);
 
   if (!ready) return null;
   if (!session) return <Login />;
@@ -126,6 +174,7 @@ export default function Admin() {
           <nav className="flex gap-1 text-[14px]">
             {(
               [
+                ['schedule', 'Расписание'],
                 ['list', 'Заявки'],
                 ['stats', 'Статистика'],
                 ['help', 'Как пользоваться'],
@@ -137,6 +186,9 @@ export default function Admin() {
                 className={`rounded-lg px-3 py-1.5 ${tab === id ? 'bg-white/10 text-white' : 'text-[var(--muted)] hover:text-white'}`}
               >
                 {label}
+                {id === 'list' && newCount > 0 && (
+                  <span className="ml-1.5 rounded-full bg-amber-400 px-1.5 text-[12px] font-semibold text-black">{newCount}</span>
+                )}
               </button>
             ))}
           </nav>
@@ -150,10 +202,13 @@ export default function Admin() {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 pt-6">
-        {tab === 'list' && <Bookings />}
+        {tab === 'schedule' && <Schedule onAdd={setAddInit} />}
+        {tab === 'list' && <Bookings newCount={newCount} onAdd={setAddInit} />}
         {tab === 'stats' && <Stats />}
         {tab === 'help' && <Help />}
       </main>
+
+      {addInit && <AddBooking init={addInit} onClose={() => setAddInit(null)} onSaved={() => setAddInit(null)} />}
     </div>
   );
 }
@@ -211,15 +266,13 @@ function Login() {
   );
 }
 
-function Bookings() {
+function Bookings({ newCount, onAdd }: { newCount: number; onAdd: (init: AddInit) => void }) {
   const [view, setView] = useState<View>('today');
   const [branch, setBranch] = useState('all');
   const [search, setSearch] = useState('');
   const [rows, setRows] = useState<Booking[]>([]);
-  const [newCount, setNewCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [adding, setAdding] = useState(false);
   const [master, setMaster] = useState(''); // '' — все мастера
 
   const load = useCallback(async () => {
@@ -246,8 +299,6 @@ function Bookings() {
     }
     setError('');
     setRows(data as Booking[]);
-    const { count } = await supabase.from('bookings').select('id', { count: 'exact', head: true }).eq('status', 'new');
-    setNewCount(count ?? 0);
   }, [view, branch, search]);
 
   useEffect(() => {
@@ -255,22 +306,7 @@ function Bookings() {
   }, [load]);
 
   // Новые заявки и изменения других администраторов появляются сами.
-  useEffect(() => {
-    const ch = supabase
-      .channel('bookings')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, (p) => {
-        if (p.eventType === 'INSERT') beep();
-        load();
-      })
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [load]);
-
-  useEffect(() => {
-    document.title = newCount ? `(${newCount}) Qasym CRM` : 'Qasym CRM';
-  }, [newCount]);
+  useLiveReload('bookings-list', load);
 
   const update = async (b: Booking, patch: Partial<Booking>) => {
     setRows((rs) => rs.map((r) => (r.id === b.id ? { ...r, ...patch } : r)));
@@ -349,7 +385,7 @@ function Bookings() {
         <button onClick={load} className="flex items-center gap-1.5 rounded-xl border border-[var(--border)] px-3 py-2 text-[14px] text-[var(--muted)] hover:text-white">
           <RefreshCw size={14} /> Обновить
         </button>
-        <button onClick={() => setAdding(true)} className="btn btn-gold !h-10">
+        <button onClick={() => onAdd({ branch: branch === 'all' ? '' : branch })} className="btn btn-gold !h-10">
           <Plus size={16} /> Добавить запись
         </button>
       </div>
@@ -375,17 +411,6 @@ function Bookings() {
           );
         })}
       </div>
-
-      {adding && (
-        <AddBooking
-          defaultBranch={branch === 'all' ? '' : branch}
-          onClose={() => setAdding(false)}
-          onSaved={() => {
-            setAdding(false);
-            load();
-          }}
-        />
-      )}
 
       {error && <p className="mt-6 text-rose-400">{error}</p>}
       {!loading && !error && shown.length === 0 && (
@@ -476,13 +501,173 @@ function Card({ b, onUpdate }: { b: Booking; onUpdate: (b: Booking, p: Partial<B
   );
 }
 
+const CELL: Record<string, string> = {
+  new: 'border-amber-400/50 bg-amber-400/15 text-amber-100',
+  confirmed: 'border-sky-400/50 bg-sky-400/15 text-sky-100',
+  done: 'border-emerald-400/50 bg-emerald-400/15 text-emerald-100',
+};
+
+// Сетка дня по филиалу: мастера × время. Сразу видно, у кого когда свободно;
+// нажать на свободную ячейку — открыть запись с этим мастером и временем.
+function Schedule({ onAdd }: { onAdd: (init: AddInit) => void }) {
+  const [branch, setBranch] = useState(LOCATIONS[0].name);
+  const [date, setDate] = useState(dayOffset(0));
+  const [rows, setRows] = useState<Booking[]>([]);
+  const [now, setNow] = useState(() => new Date());
+
+  const load = useCallback(async () => {
+    const { data } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq('location', branch)
+      .eq('date', date)
+      .in('status', ['new', 'confirmed', 'done']);
+    setRows((data ?? []) as Booking[]);
+  }, [branch, date]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+  useLiveReload('schedule', load);
+
+  // прошедшее время гаснет само
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+
+  const masters = LOCATIONS.find((l) => l.name === branch)?.masters ?? [];
+  // «Любой мастер» — заявки без мастера: показываем отдельной колонкой, чтобы их распределили
+  const cols = [...masters, ...(rows.some((r) => r.barber === 'Любой') ? ['Любой'] : [])];
+  const at = (m: string, t: string) => rows.filter((r) => r.barber === m && r.time === t);
+  const isPast = (t: string) => {
+    if (date < dayOffset(0)) return true;
+    if (date > dayOffset(0)) return false;
+    const [h, mm] = t.split(':').map(Number);
+    return h * 60 + mm <= now.getHours() * 60 + now.getMinutes();
+  };
+  const freeCount = (m: string) => TIME_SLOTS.filter((t) => !isPast(t) && at(m, t).length === 0).length;
+  const shift = (n: number) => {
+    const d = new Date(`${date}T00:00:00`);
+    d.setDate(d.getDate() + n);
+    setDate(iso(d));
+  };
+  const chip = (active: boolean) =>
+    `rounded-full border px-4 py-2 text-[14px] ${active ? 'border-[var(--gold)] bg-[var(--gold)]/10 text-white' : 'border-[var(--border)] text-[var(--muted)] hover:text-white'}`;
+
+  return (
+    <div>
+      <div className="flex flex-wrap gap-2">
+        {LOCATIONS.map((l) => (
+          <button key={l.name} onClick={() => setBranch(l.name)} className={chip(branch === l.name)}>
+            {l.name}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button onClick={() => shift(-1)} aria-label="Предыдущий день" className="rounded-full border border-[var(--border)] px-3 py-2 text-[14px] text-[var(--muted)] hover:text-white">
+          ‹
+        </button>
+        <div className="min-w-[170px] text-center font-display text-[18px] tracking-[0.04em] uppercase">{humanDate(date)}</div>
+        <button onClick={() => shift(1)} aria-label="Следующий день" className="rounded-full border border-[var(--border)] px-3 py-2 text-[14px] text-[var(--muted)] hover:text-white">
+          ›
+        </button>
+        <button onClick={() => setDate(dayOffset(0))} className={chip(date === dayOffset(0))}>
+          Сегодня
+        </button>
+        <button onClick={() => setDate(dayOffset(1))} className={chip(date === dayOffset(1))}>
+          Завтра
+        </button>
+        <input
+          type="date"
+          value={date}
+          onChange={(e) => e.target.value && setDate(e.target.value)}
+          aria-label="Выбрать дату"
+          className="rounded-xl border border-[var(--border)] bg-black/40 px-3 py-2 text-[14px]"
+        />
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-[var(--muted)]">
+        <span className="flex items-center gap-1.5"><i className="h-3 w-3 rounded border border-dashed border-white/25" /> свободно — нажмите, чтобы записать</span>
+        <span className="flex items-center gap-1.5"><i className={`h-3 w-3 rounded border ${CELL.new}`} /> новая</span>
+        <span className="flex items-center gap-1.5"><i className={`h-3 w-3 rounded border ${CELL.confirmed}`} /> подтверждена</span>
+        <span className="flex items-center gap-1.5"><i className={`h-3 w-3 rounded border ${CELL.done}`} /> пришёл</span>
+      </div>
+
+      {/* Широкая сетка листается вбок, колонка со временем стоит на месте */}
+      <div className="-mx-4 mt-4 overflow-x-auto px-4 pb-2">
+        <table className="border-separate border-spacing-1 text-[13px]">
+          <thead>
+            <tr>
+              <th className="sticky left-0 z-10 bg-[#0b0806]" />
+              {cols.map((m) => (
+                <th key={m} className="min-w-[104px] px-1 pb-2 align-bottom font-normal">
+                  <div className="flex flex-col items-center gap-1">
+                    {MASTER_PHOTOS[m] ? (
+                      <img src={MASTER_PHOTOS[m]} alt="" className="h-9 w-9 rounded-full object-cover" />
+                    ) : (
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/5 text-[var(--gold)]">★</span>
+                    )}
+                    <span className="text-[14px] text-white">{m}</span>
+                    {m !== 'Любой' && (
+                      <span className={`text-[12px] ${freeCount(m) ? 'text-emerald-300' : 'text-rose-300'}`}>
+                        {freeCount(m) ? `свободно ${freeCount(m)}` : 'всё занято'}
+                      </span>
+                    )}
+                  </div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {TIME_SLOTS.map((t) => {
+              const past = isPast(t);
+              return (
+                <tr key={t}>
+                  <th className={`sticky left-0 z-10 bg-[#0b0806] pr-2 text-right font-display text-[15px] font-normal ${past ? 'text-white/25' : 'text-white/80'}`}>{t}</th>
+                  {cols.map((m) => {
+                    const list = at(m, t);
+                    if (list.length) {
+                      const b = list[0];
+                      return (
+                        <td key={m} title={`${b.name}${b.phone ? ` · ${b.phone}` : ''} · ${STATUS[b.status].label}`} className={`h-11 rounded-lg border px-2 ${CELL[b.status]} ${past ? 'opacity-50' : ''}`}>
+                          <div className="max-w-[110px] truncate">{b.name}</div>
+                          {list.length > 1 && <div className="text-[11px] opacity-70">+ ещё {list.length - 1}</div>}
+                        </td>
+                      );
+                    }
+                    if (past || m === 'Любой') return <td key={m} className="h-11 rounded-lg bg-white/[0.02]" />;
+                    return (
+                      <td key={m} className="h-11 p-0">
+                        <button
+                          onClick={() => onAdd({ branch, barber: m, date, time: t })}
+                          aria-label={`Записать к ${m} на ${t}`}
+                          className="h-full w-full rounded-lg border border-dashed border-white/15 text-[12px] text-white/30 transition-colors hover:border-[var(--gold)] hover:bg-[var(--gold)]/10 hover:text-[var(--gold-soft)]"
+                        >
+                          свободно
+                        </button>
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // Запись по телефону или клиент пришёл без записи. Время этой записи сразу
 // становится занятым и на сайте.
-function AddBooking({ defaultBranch, onClose, onSaved }: { defaultBranch: string; onClose: () => void; onSaved: () => void }) {
-  const [branch, setBranch] = useState(defaultBranch);
-  const [barber, setBarber] = useState('');
-  const [date, setDate] = useState(dayOffset(0));
-  const [time, setTime] = useState('');
+function AddBooking({ init, onClose, onSaved }: { init: AddInit; onClose: () => void; onSaved: () => void }) {
+  const [branch, setBranch] = useState(init.branch ?? '');
+  const [barber, setBarber] = useState(init.barber ?? '');
+  const [date, setDate] = useState(init.date ?? dayOffset(0));
+  const [time, setTime] = useState(init.time ?? '');
+  const pickedFor = useRef(`${branch}|${barber}|${date}`);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [note, setNote] = useState('');
@@ -494,7 +679,12 @@ function AddBooking({ defaultBranch, onClose, onSaved }: { defaultBranch: string
   const masters = LOCATIONS.find((l) => l.name === branch)?.masters ?? [];
 
   useEffect(() => {
-    setTime('');
+    // сменили филиал, мастера или дату — выбранное время больше не актуально
+    const key = `${branch}|${barber}|${date}`;
+    if (pickedFor.current !== key) {
+      pickedFor.current = key;
+      setTime('');
+    }
     if (!branch || !barber || barber === 'Любой' || !date) return setBusy([]);
     supabase.rpc('busy_slots', { p_location: branch, p_date: date }).then(({ data }) => {
       setBusy(((data ?? []) as { barber: string; time: string }[]).filter((r) => r.barber === barber).map((r) => r.time));
@@ -741,6 +931,7 @@ function StatTable({ title, items }: { title: string; items: [string, { total: n
 
 function Help() {
   const steps = [
+    ['Расписание', 'Первая вкладка. Выберите филиал и день — видно всех мастеров и всё время: цветные ячейки заняты (наведите, чтобы увидеть клиента), «свободно» — можно записывать. Под каждым мастером написано, сколько у него свободных окошек. Нажмите «свободно» — откроется запись с этим мастером и временем.'],
     ['Новая заявка', 'Клиент записался на сайте — заявка появляется сама, со звуком, на вкладке «Сегодня» или в «Новые», и приходит сообщением в Telegram-группу. Обычно клиент ещё и пишет в WhatsApp филиала.'],
     ['Запись по телефону', 'Клиент позвонил или написал — нажмите «Добавить запись», выберите филиал, мастера, дату и время. Это время сразу станет занятым на сайте. Пришёл без записи — поставьте галочку «Клиент уже здесь».'],
     ['Подтвердить', 'Свяжитесь с клиентом (кнопки «Телефон» и «WhatsApp» в карточке) и нажмите «Подтвердить». Если клиент передумал — «Отменить».'],
