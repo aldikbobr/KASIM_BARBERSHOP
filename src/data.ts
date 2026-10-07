@@ -60,7 +60,7 @@ export const SERVICES = [
     img: 'https://images.pexels.com/photos/5970246/pexels-photo-5970246.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
     alt: 'Стрижка машинкой с точным переходом',
     desc: 'Мужская стрижка под форму головы и тип волос',
-    prices: ['5 000', '6 000', '8 000'],
+    prices: ['5 000', '6 000', '10 000'],
   },
   {
     name: 'Борода',
