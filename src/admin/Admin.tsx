@@ -757,7 +757,8 @@ function AddBooking({ init, lock, onClose, onSaved }: { init: AddInit; lock: str
   const [branch, setBranch] = useState(init.branch ?? '');
   const [barber, setBarber] = useState(init.barber ?? '');
   const [date, setDate] = useState(init.date ?? dayOffset(0));
-  const [time, setTime] = useState(init.time ?? '');
+  const [times, setTimes] = useState<string[]>(init.time ? [init.time] : []); // можно несколько времён
+  const [extra, setExtra] = useState<string[]>([]); // другие дни: то же время и тот же мастер
   const pickedFor = useRef(`${branch}|${barber}|${date}`);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -768,40 +769,54 @@ function AddBooking({ init, lock, onClose, onSaved }: { init: AddInit; lock: str
   const [error, setError] = useState('');
 
   const masters = LOCATIONS.find((l) => l.name === branch)?.masters ?? [];
+  // все выбранные дни без повторов; запись создаётся на каждое выбранное время в каждый из этих дней
+  const dates = [...new Set([date, ...extra].filter(Boolean))];
+  const datesKey = dates.join();
 
   useEffect(() => {
-    // сменили филиал, мастера или дату — выбранное время больше не актуально
+    // сменили филиал, мастера или основную дату — выбранное время больше не актуально
     const key = `${branch}|${barber}|${date}`;
     if (pickedFor.current !== key) {
       pickedFor.current = key;
-      setTime('');
+      setTimes([]);
     }
     if (!branch || !barber || barber === 'Любой' || !date) return setBusy([]);
-    supabase.rpc('busy_slots', { p_location: branch, p_date: date }).then(({ data }) => {
-      setBusy(((data ?? []) as { barber: string; time: string }[]).filter((r) => r.barber === barber).map((r) => r.time));
+    // занятое время показываем, если оно занято хотя бы в один из выбранных дней
+    Promise.all(dates.map((d) => supabase.rpc('busy_slots', { p_location: branch, p_date: d }))).then((res) => {
+      const taken = res.flatMap((r) => ((r.data ?? []) as { barber: string; time: string }[]).filter((x) => x.barber === barber).map((x) => x.time));
+      setBusy(taken);
+      setTimes((t) => t.filter((x) => !taken.includes(x)));
     });
-  }, [branch, barber, date]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branch, barber, datesKey]);
 
-  const ready = branch && barber && date && time && name.trim();
+  const ready = branch && barber && dates.length && times.length && name.trim();
+  const count = dates.length * times.length;
 
   const save = async () => {
     if (!ready) return;
+    if (count > 40) return setError('Слишком много записей за раз — не больше 40.');
     setSaving(true);
     setError('');
-    const { error } = await supabase.from('bookings').insert({
-      location: branch,
-      barber,
-      date,
-      time,
-      name: name.trim(),
-      phone: phone.trim(),
-      note: note.trim(),
-      source: 'admin',
-      status: walkIn ? 'done' : 'confirmed',
-    });
+    // одним запросом: либо создаются все записи, либо ни одной
+    const { error } = await supabase.from('bookings').insert(
+      dates.flatMap((d) =>
+        times.map((t) => ({
+          location: branch,
+          barber,
+          date: d,
+          time: t,
+          name: name.trim(),
+          phone: phone.trim(),
+          note: note.trim(),
+          source: 'admin',
+          status: walkIn && dates.length === 1 ? 'done' : 'confirmed',
+        }))
+      )
+    );
     setSaving(false);
     if (!error) return onSaved();
-    setError(error.code === '23505' ? 'Это время у мастера уже занято — выберите другое.' : 'Не сохранилось. Проверьте интернет и попробуйте ещё раз.');
+    setError(error.code === '23505' ? 'Одно из выбранных времён у мастера уже занято. Ничего не сохранено — обновите и выберите другое.' : 'Не сохранилось. Проверьте интернет и попробуйте ещё раз.');
   };
 
   // 16px на телефоне — иначе iPhone приближает страницу при вводе
@@ -855,19 +870,20 @@ function AddBooking({ init, lock, onClose, onSaved }: { init: AddInit; lock: str
           </div>
 
           <div>
-            <span className={label}>Время</span>
+            <span className={label}>Время — можно выбрать несколько</span>
             <div className="mt-1.5 grid grid-cols-5 gap-1.5">
               {TIME_SLOTS.map((s) => {
                 const taken = busy.includes(s);
+                const on = times.includes(s);
                 return (
                   <button
                     key={s}
                     disabled={taken}
-                    onClick={() => setTime(s)}
+                    onClick={() => setTimes(on ? times.filter((x) => x !== s) : [...times, s])}
                     className={`rounded-lg border py-1.5 text-[13px] sm:py-2 ${
                       taken
                         ? 'cursor-not-allowed border-transparent text-white/20 line-through'
-                        : time === s
+                        : on
                           ? 'border-[var(--gold)] bg-[var(--gold)]/10'
                           : 'border-[var(--border)] text-[var(--muted)]'
                     }`}
@@ -876,6 +892,31 @@ function AddBooking({ init, lock, onClose, onSaved }: { init: AddInit; lock: str
                   </button>
                 );
               })}
+            </div>
+          </div>
+
+          <div>
+            <span className={label}>Другие дни — то же время и тот же мастер</span>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              {extra.map((d, i) => (
+                <span key={i} className="flex items-center gap-1 rounded-xl border border-[var(--border)] bg-black/40 pr-2">
+                  <input
+                    type="date"
+                    value={d}
+                    onChange={(e) => setExtra(extra.map((x, j) => (j === i ? e.target.value : x)))}
+                    className="bg-transparent px-3 py-1.5 text-[16px] focus:outline-none sm:text-[14px]"
+                  />
+                  <button onClick={() => setExtra(extra.filter((_, j) => j !== i))} aria-label="Убрать день" className="text-[var(--muted)] hover:text-white">
+                    <X size={16} />
+                  </button>
+                </span>
+              ))}
+              <button
+                onClick={() => setExtra([...extra, ''])}
+                className="flex items-center gap-1 rounded-xl border border-dashed border-white/20 px-3 py-1.5 text-[14px] text-[var(--muted)] hover:text-white"
+              >
+                <Plus size={14} /> Добавить день
+              </button>
             </div>
           </div>
 
@@ -895,17 +936,19 @@ function AddBooking({ init, lock, onClose, onSaved }: { init: AddInit; lock: str
             <input value={note} onChange={(e) => setNote(e.target.value)} className={field} />
           </label>
 
-          <label className="flex items-center gap-2.5 text-[14px]">
-            <input type="checkbox" checked={walkIn} onChange={(e) => setWalkIn(e.target.checked)} className="h-4 w-4 accent-[#d4af37]" />
-            Клиент уже здесь (пришёл без записи) — сразу отметить «Пришёл»
-          </label>
+          {dates.length === 1 && (
+            <label className="flex items-center gap-2.5 text-[14px]">
+              <input type="checkbox" checked={walkIn} onChange={(e) => setWalkIn(e.target.checked)} className="h-4 w-4 accent-[#d4af37]" />
+              Клиент уже здесь (пришёл без записи) — сразу отметить «Пришёл»
+            </label>
+          )}
         </div>
 
         {error && <p className="mt-4 text-[14px] text-rose-400">{error}</p>}
 
         <div className="mt-4 flex gap-2 sm:mt-5">
           <button onClick={save} disabled={!ready || saving} className={`btn ${ready && !saving ? 'btn-gold' : 'btn-ghost opacity-40'}`}>
-            {saving ? 'Сохраняем…' : 'Сохранить'}
+            {saving ? 'Сохраняем…' : count > 1 ? `Сохранить (${count})` : 'Сохранить'}
           </button>
           <button onClick={onClose} className="btn btn-ghost">
             Отмена
@@ -1162,6 +1205,7 @@ function Help() {
     ['Расписание', 'Первая вкладка. Выберите филиал и день — видно всех мастеров и всё время: цветные ячейки заняты (нажмите, чтобы открыть клиента), «свободно» — можно записывать. Под каждым мастером написано, сколько у него свободных окошек. Нажмите «свободно» — откроется запись с этим мастером и временем.'],
     ['Новая заявка', 'Клиент записался на сайте — заявка появляется сама, со звуком, и приходит сообщением в Telegram-группу. Подтверждать её не нужно. Если хотите, напомните клиенту о визите кнопками «Телефон» или «WhatsApp» в карточке.'],
     ['Запись по телефону', 'Клиент позвонил или написал — нажмите «Записать», выберите филиал, мастера, дату и время. Это время сразу станет занятым на сайте. Пришёл без записи — поставьте галочку «Клиент уже здесь».'],
+    ['Несколько записей сразу', 'В той же форме можно выбрать несколько времён подряд (например, длинная услуга) и добавить другие дни кнопкой «Добавить день»: запись создастся на каждое время в каждый из дней. Если хоть одно время занято, не сохранится ни одна запись.'],
     ['Отметить визит', 'Клиент пришёл — нажмите «Пришёл». Не пришёл и не предупредил — «Не пришёл». Это можно сделать в «Заявках» или прямо в расписании. Нужно для статистики.'],
     ['Клиент передумал', 'Нажмите «Отменить» — время освободится, на него снова можно записать.'],
     ['Ошиблись кнопкой', 'Нажмите «Вернуть» — запись снова станет ожидающей.'],
