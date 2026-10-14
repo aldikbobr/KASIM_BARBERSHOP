@@ -3,9 +3,11 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
-// /crm — CRM для администраторов (старый адрес /admin тоже открывает её). Грузится отдельным файлом, сайт её не тянет.
+// CRM для администраторов: по адресу /crm (старый /admin тоже работает) или на отдельном домене kasim-barbershop-crm.*
+// Грузится отдельным файлом, сайт её не тянет.
 const Admin = lazy(() => import('./admin/Admin.tsx'));
-const isAdmin = ['/crm', '/admin'].includes(location.pathname.replace(/\/$/, ''));
+const isAdmin =
+  ['/crm', '/admin'].includes(location.pathname.replace(/\/$/, '')) || location.hostname.startsWith('kasim-barbershop-crm.');
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

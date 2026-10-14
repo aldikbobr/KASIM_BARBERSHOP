@@ -272,21 +272,19 @@ export default function Admin() {
 
 function Login() {
   const [who, setWho] = useState(''); // филиал или «Владелец»
-  const [manual, setManual] = useState(false); // вход по почте — для прежнего общего входа
-  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const login = manual ? email.trim() : LOGIN_EMAIL[who];
+    const login = LOGIN_EMAIL[who];
     if (!login) return setError('Выберите филиал');
     setBusy(true);
     setError('');
     const { error } = await supabase.auth.signInWithPassword({ email: login, password });
     setBusy(false);
-    if (error) setError(manual ? 'Неверный email или пароль' : 'Неверный пароль или вход для этого филиала ещё не создан');
+    if (error) setError('Неверный пароль');
   };
 
   return (
@@ -296,32 +294,14 @@ function Login() {
           Qasym <span className="gold-text">CRM</span>
         </div>
         <p className="mt-1 text-[14px] text-[var(--muted)]">Вход для администраторов</p>
-        {manual ? (
-          <>
-            <label className="mt-6 block text-[12px] tracking-[0.12em] uppercase text-[var(--muted)]" htmlFor="crm-email">
-              Email
-            </label>
-            <input
-              id="crm-email"
-              type="email"
-              autoComplete="username"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1.5 w-full rounded-xl border border-[var(--border)] bg-black/30 px-4 py-3 text-[16px] focus:border-[var(--gold)] focus:outline-none"
-            />
-          </>
-        ) : (
-          <>
-            <span className="mt-6 block text-[12px] tracking-[0.12em] uppercase text-[var(--muted)]">Ваш филиал</span>
-            <div className="mt-1.5 flex flex-wrap gap-2">
-              {[...LOCATIONS.map((l) => l.name), 'Владелец'].map((n) => (
-                <button type="button" key={n} onClick={() => setWho(n)} className={chip(who === n)}>
-                  {n}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
+        <span className="mt-6 block text-[12px] tracking-[0.12em] uppercase text-[var(--muted)]">Ваш филиал</span>
+        <div className="mt-1.5 flex flex-wrap gap-2">
+          {[...LOCATIONS.map((l) => l.name), 'Владелец'].map((n) => (
+            <button type="button" key={n} onClick={() => setWho(n)} className={chip(who === n)}>
+              {n}
+            </button>
+          ))}
+        </div>
         <label className="mt-4 block text-[12px] tracking-[0.12em] uppercase text-[var(--muted)]" htmlFor="crm-pass">
           Пароль
         </label>
@@ -344,9 +324,6 @@ function Login() {
             вкладке «Пароли».
           </p>
         </details>
-        <button type="button" onClick={() => setManual(!manual)} className="mt-3 w-full text-center text-[13px] text-[var(--muted)] hover:text-white">
-          {manual ? 'Вход по филиалу' : 'Войти по почте'}
-        </button>
       </form>
     </div>
   );
