@@ -124,6 +124,19 @@ function beep() {
   }
 }
 
+interface Me {
+  role: 'owner' | 'staff';
+  branch: string | null;
+}
+
+// Почта входа каждого филиала. Входы создаёт владелец проекта в Supabase (Authentication → Users).
+const LOGIN_EMAIL: Record<string, string> = {
+  ДСР: 'dsr@qasym.kz',
+  Тайга: 'taiga@qasym.kz',
+  Шажимбаева: 'shazhimbaeva@qasym.kz',
+  Владелец: 'kasym@qasym.kz',
+};
+
 // Что подставить в форму «Добавить запись» (из расписания — мастер, дата и время).
 interface AddInit {
   branch?: string;
@@ -138,7 +151,7 @@ export default function Admin() {
   const [tab, setTab] = useState<'schedule' | 'list' | 'stats' | 'passwords' | 'help'>('schedule');
   const [newCount, setNewCount] = useState(0);
   const [addInit, setAddInit] = useState<AddInit | null>(null);
-  const [owner, setOwner] = useState(false); // личный вход Касыма — ему видна вкладка «Пароли»
+  const [me, setMe] = useState<Me | null | undefined>(undefined); // undefined — ещё грузится, null — входа нет в списке сотрудников
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -150,9 +163,13 @@ export default function Admin() {
   }, []);
 
   useEffect(() => {
-    if (!session) return setOwner(false);
-    supabase.rpc('crm_role').then(({ data }) => setOwner(data === 'owner'));
+    if (!session) return setMe(undefined);
+    supabase.rpc('crm_me').then(({ data }) => setMe(((data ?? []) as Me[])[0] ?? null));
   }, [session]);
+
+  // Касым (owner) — все филиалы и вкладка «Пароли»; администратор филиала видит только свой. '*' — прежний общий вход.
+  const owner = me?.role === 'owner';
+  const lock = me && !owner && me.branch !== '*' ? me.branch : null;
 
   // Число новых заявок и звук — на любой вкладке.
   useEffect(() => {
@@ -182,6 +199,16 @@ export default function Admin() {
 
   if (!ready) return null;
   if (!session) return <Login />;
+  if (me === undefined) return null;
+  if (me === null)
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-4 text-center">
+        <p className="max-w-sm text-[16px]">У этого входа нет доступа к CRM. Обратитесь к Касыму.</p>
+        <button onClick={() => supabase.auth.signOut()} className="btn btn-ghost">
+          Выйти
+        </button>
+      </div>
+    );
 
   return (
     <div className="min-h-screen pb-16">
@@ -190,6 +217,7 @@ export default function Admin() {
         <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-1.5 px-4 py-2 sm:py-3">
           <div className="font-display text-[16px] tracking-[0.2em] uppercase sm:text-[18px]">
             Qasym <span className="gold-text">CRM</span>
+            {lock && <span className="ml-2 text-[13px] tracking-[0.1em] text-[var(--muted)]">· {lock}</span>}
           </div>
           <nav className="no-sb order-last -mx-1.5 flex w-full gap-0.5 overflow-x-auto text-[13px] min-[400px]:text-[14px] sm:order-none sm:mx-0 sm:w-auto sm:gap-1">
             {(
@@ -223,19 +251,28 @@ export default function Admin() {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 pt-4 sm:pt-6">
-        {tab === 'schedule' && <Schedule onAdd={setAddInit} />}
-        {tab === 'list' && <Bookings newCount={newCount} onAdd={setAddInit} />}
+        {tab === 'schedule' && <Schedule lock={lock} onAdd={setAddInit} />}
+        {tab === 'list' && <Bookings lock={lock} newCount={newCount} onAdd={setAddInit} />}
         {tab === 'stats' && <Stats />}
         {tab === 'passwords' && owner && <Passwords />}
         {tab === 'help' && <Help />}
       </main>
 
-      {addInit && <AddBooking init={addInit} onClose={() => setAddInit(null)} onSaved={() => setAddInit(null)} />}
+      {addInit && (
+        <AddBooking
+          init={lock ? { ...addInit, branch: lock } : addInit}
+          lock={lock}
+          onClose={() => setAddInit(null)}
+          onSaved={() => setAddInit(null)}
+        />
+      )}
     </div>
   );
 }
 
 function Login() {
+  const [who, setWho] = useState(''); // филиал или «Владелец»
+  const [manual, setManual] = useState(false); // вход по почте — для прежнего общего входа
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -243,11 +280,13 @@ function Login() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const login = manual ? email.trim() : LOGIN_EMAIL[who];
+    if (!login) return setError('Выберите филиал');
     setBusy(true);
     setError('');
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    const { error } = await supabase.auth.signInWithPassword({ email: login, password });
     setBusy(false);
-    if (error) setError('Неверный email или пароль');
+    if (error) setError(manual ? 'Неверный email или пароль' : 'Неверный пароль или вход для этого филиала ещё не создан');
   };
 
   return (
@@ -257,17 +296,32 @@ function Login() {
           Qasym <span className="gold-text">CRM</span>
         </div>
         <p className="mt-1 text-[14px] text-[var(--muted)]">Вход для администраторов</p>
-        <label className="mt-6 block text-[12px] tracking-[0.12em] uppercase text-[var(--muted)]" htmlFor="crm-email">
-          Email
-        </label>
-        <input
-          id="crm-email"
-          type="email"
-          autoComplete="username"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="mt-1.5 w-full rounded-xl border border-[var(--border)] bg-black/30 px-4 py-3 text-[16px] focus:border-[var(--gold)] focus:outline-none"
-        />
+        {manual ? (
+          <>
+            <label className="mt-6 block text-[12px] tracking-[0.12em] uppercase text-[var(--muted)]" htmlFor="crm-email">
+              Email
+            </label>
+            <input
+              id="crm-email"
+              type="email"
+              autoComplete="username"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="mt-1.5 w-full rounded-xl border border-[var(--border)] bg-black/30 px-4 py-3 text-[16px] focus:border-[var(--gold)] focus:outline-none"
+            />
+          </>
+        ) : (
+          <>
+            <span className="mt-6 block text-[12px] tracking-[0.12em] uppercase text-[var(--muted)]">Ваш филиал</span>
+            <div className="mt-1.5 flex flex-wrap gap-2">
+              {[...LOCATIONS.map((l) => l.name), 'Владелец'].map((n) => (
+                <button type="button" key={n} onClick={() => setWho(n)} className={chip(who === n)}>
+                  {n}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
         <label className="mt-4 block text-[12px] tracking-[0.12em] uppercase text-[var(--muted)]" htmlFor="crm-pass">
           Пароль
         </label>
@@ -286,18 +340,21 @@ function Login() {
         <details className="mt-4 text-[14px] text-[var(--muted)]">
           <summary className="cursor-pointer text-center hover:text-white">Забыли пароль?</summary>
           <p className="mt-3 leading-relaxed">
-            Пароль сотрудников восстанавливает только Касым. Позвоните ему — он войдёт в CRM под своим логином и задаст новый пароль на
+            Пароль администратора филиала задаёт только Касым. Позвоните ему — он войдёт в CRM как «Владелец» и поставит новый пароль на
             вкладке «Пароли».
           </p>
         </details>
+        <button type="button" onClick={() => setManual(!manual)} className="mt-3 w-full text-center text-[13px] text-[var(--muted)] hover:text-white">
+          {manual ? 'Вход по филиалу' : 'Войти по почте'}
+        </button>
       </form>
     </div>
   );
 }
 
-function Bookings({ newCount, onAdd }: { newCount: number; onAdd: (init: AddInit) => void }) {
+function Bookings({ lock, newCount, onAdd }: { lock: string | null; newCount: number; onAdd: (init: AddInit) => void }) {
   const [view, setView] = useState<View>('today');
-  const [branch, setBranch] = useState('all');
+  const [branch, setBranch] = useState(lock ?? 'all');
   const [search, setSearch] = useState('');
   const [rows, setRows] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -398,6 +455,7 @@ function Bookings({ newCount, onAdd }: { newCount: number; onAdd: (init: AddInit
           }}
           className="min-w-0 flex-1 rounded-xl border border-[var(--border)] bg-black/40 px-3 py-2 text-[16px] sm:flex-none sm:text-[14px]"
           aria-label="Филиал"
+          hidden={!!lock}
         >
           <option value="all">Все филиалы</option>
           {LOCATIONS.map((l) => (
@@ -535,8 +593,8 @@ const CELL: Record<string, string> = {
 
 // Сетка дня по филиалу: мастера × время. Сразу видно, у кого когда свободно;
 // нажать на свободную ячейку — открыть запись с этим мастером и временем.
-function Schedule({ onAdd }: { onAdd: (init: AddInit) => void }) {
-  const [branch, setBranch] = useState(LOCATIONS[0].name);
+function Schedule({ lock, onAdd }: { lock: string | null; onAdd: (init: AddInit) => void }) {
+  const [branch, setBranch] = useState(lock ?? LOCATIONS[0].name);
   const [date, setDate] = useState(dayOffset(0));
   const [rows, setRows] = useState<Booking[]>([]);
   const [now, setNow] = useState(() => new Date());
@@ -585,13 +643,15 @@ function Schedule({ onAdd }: { onAdd: (init: AddInit) => void }) {
 
   return (
     <div>
-      <div className="flex gap-2 sm:flex-wrap">
-        {LOCATIONS.map((l) => (
-          <button key={l.name} onClick={() => setBranch(l.name)} className={chip(branch === l.name)}>
-            {l.name}
-          </button>
-        ))}
-      </div>
+      {!lock && (
+        <div className="flex gap-2 sm:flex-wrap">
+          {LOCATIONS.map((l) => (
+            <button key={l.name} onClick={() => setBranch(l.name)} className={chip(branch === l.name)}>
+              {l.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <button onClick={() => shift(-1)} aria-label="Предыдущий день" className={arrow}>
@@ -716,7 +776,7 @@ function Schedule({ onAdd }: { onAdd: (init: AddInit) => void }) {
 
 // Запись по телефону или клиент пришёл без записи. Время этой записи сразу
 // становится занятым и на сайте.
-function AddBooking({ init, onClose, onSaved }: { init: AddInit; onClose: () => void; onSaved: () => void }) {
+function AddBooking({ init, lock, onClose, onSaved }: { init: AddInit; lock: string | null; onClose: () => void; onSaved: () => void }) {
   const [branch, setBranch] = useState(init.branch ?? '');
   const [barber, setBarber] = useState(init.barber ?? '');
   const [date, setDate] = useState(init.date ?? dayOffset(0));
@@ -785,7 +845,7 @@ function AddBooking({ init, onClose, onSaved }: { init: AddInit; onClose: () => 
           <div>
             <span className={label}>Филиал</span>
             <div className="mt-1.5 flex flex-wrap gap-2">
-              {LOCATIONS.map((l) => (
+              {LOCATIONS.filter((l) => !lock || l.name === lock).map((l) => (
                 <button
                   key={l.name}
                   onClick={() => {
@@ -1046,23 +1106,26 @@ function StatTable({ title, items }: { title: string; items: [string, { total: n
   );
 }
 
-// Только для Касыма: новый пароль общего входа сотрудников и смена своего пароля.
+// Только для Касыма: пароль администратора каждого филиала и смена своего пароля.
 function Passwords() {
-  const [staffPass, setStaffPass] = useState('');
-  const [staffMsg, setStaffMsg] = useState('');
+  const [pass, setPass] = useState<Record<string, string>>({});
+  const [msg, setMsg] = useState<Record<string, string>>({});
   const [myPass, setMyPass] = useState('');
   const [myPass2, setMyPass2] = useState('');
   const [myMsg, setMyMsg] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const saveStaff = async () => {
-    if (staffPass.length < 8) return setStaffMsg('Пароль должен быть не короче 8 символов');
-    if (!confirm('Поставить новый пароль? Все сотрудники выйдут из CRM и войдут уже с новым паролем.')) return;
+  const saveBranch = async (name: string) => {
+    const p = pass[name] ?? '';
+    const say = (t: string) => setMsg((m) => ({ ...m, [name]: t }));
+    if (p.length < 8) return say('Пароль должен быть не короче 8 символов');
+    if (!confirm(`Поставить новый пароль администратору «${name}»? Он выйдет из CRM на всех устройствах.`)) return;
     setBusy(true);
-    const { error } = await supabase.rpc('set_staff_password', { p_password: staffPass });
+    const { error } = await supabase.rpc('set_staff_password', { p_email: LOGIN_EMAIL[name], p_password: p });
     setBusy(false);
-    setStaffMsg(error ? 'Не сохранилось. Проверьте интернет и попробуйте ещё раз.' : `Готово. Новый пароль сотрудников: ${staffPass} — передайте его администраторам.`);
-    if (!error) setStaffPass('');
+    if (error) return say(error.message.includes('не создан') ? error.message : 'Не сохранилось. Проверьте интернет и попробуйте ещё раз.');
+    say(`Готово. Новый пароль «${name}»: ${p} — передайте его администратору.`);
+    setPass((s) => ({ ...s, [name]: '' }));
   };
 
   const saveMine = async () => {
@@ -1083,24 +1146,26 @@ function Passwords() {
 
   return (
     <div className="grid max-w-xl gap-4">
-      <section className={box}>
-        <h2 className="font-display text-[18px] tracking-[0.06em] uppercase">Пароль сотрудников</h2>
-        <p className="mt-1.5 text-[14px] leading-relaxed text-[var(--muted)]">
-          Если администратор забыл пароль или от вас ушёл сотрудник — задайте новый. Все устройства сотрудников выйдут из CRM, войти можно
-          будет только с новым паролем.
-        </p>
-        <input
-          value={staffPass}
-          onChange={(e) => setStaffPass(e.target.value)}
-          placeholder="Новый пароль, от 8 символов"
-          autoComplete="off"
-          className={field}
-        />
-        {staffMsg && <p className="mt-2 text-[14px] text-[var(--gold-soft)]">{staffMsg}</p>}
-        <button onClick={saveStaff} disabled={busy} className="btn btn-gold mt-3 !h-10">
-          Сохранить пароль сотрудников
-        </button>
-      </section>
+      <p className="text-[14px] leading-relaxed text-[var(--muted)]">
+        У каждого филиала свой администратор и свой пароль. Забыл пароль или ушёл сотрудник — задайте новый: он выйдет из CRM на всех
+        устройствах и войдёт уже с новым паролем. Остальные филиалы это не затронет.
+      </p>
+      {LOCATIONS.map((l) => (
+        <section key={l.name} className={box}>
+          <h2 className="font-display text-[18px] tracking-[0.06em] uppercase">{l.name}</h2>
+          <input
+            value={pass[l.name] ?? ''}
+            onChange={(e) => setPass((s) => ({ ...s, [l.name]: e.target.value }))}
+            placeholder="Новый пароль, от 8 символов"
+            autoComplete="off"
+            className={field}
+          />
+          {msg[l.name] && <p className="mt-2 text-[14px] text-[var(--gold-soft)]">{msg[l.name]}</p>}
+          <button onClick={() => saveBranch(l.name)} disabled={busy} className="btn btn-gold mt-3 !h-10">
+            Сохранить пароль
+          </button>
+        </section>
+      ))}
 
       <section className={box}>
         <h2 className="font-display text-[18px] tracking-[0.06em] uppercase">Мой пароль</h2>
@@ -1126,7 +1191,8 @@ function Help() {
     ['Заметки', 'В строке под заявкой можно написать что угодно: пожелания клиента, предоплата и т. п. Сохраняется само, когда вы нажмёте в другое место.'],
     ['Статистика', 'Выберите период кнопками или поставьте свои даты «с … по …». «Скачать (Excel)» сохраняет цифры файлом.'],
     ['Поиск', 'Найти клиента по имени или номеру телефона можно в строке поиска на вкладке «Заявки» — ищет по всем датам.'],
-    ['Забыли пароль', 'Новый пароль сотрудников задаёт только Касым: он входит под своим логином и открывает вкладку «Пароли». После смены все сотрудники выходят из CRM и входят с новым паролем.'],
+    ['Вход', 'На экране входа выберите свой филиал и введите пароль. Вы видите только записи своего филиала. Касым («Владелец») видит все.'],
+    ['Забыли пароль', 'Новый пароль администратора филиала задаёт только Касым: он входит как «Владелец» и открывает вкладку «Пароли». После смены администратор выходит из CRM и входит с новым паролем.'],
   ];
   return (
     <div className="max-w-2xl">
