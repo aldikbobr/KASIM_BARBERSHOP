@@ -3,9 +3,9 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
-// /admin — CRM для администраторов. Грузится отдельным файлом, сайт её не тянет.
+// /crm — CRM для администраторов (старый адрес /admin тоже открывает её). Грузится отдельным файлом, сайт её не тянет.
 const Admin = lazy(() => import('./admin/Admin.tsx'));
-const isAdmin = location.pathname.replace(/\/$/, '') === '/admin';
+const isAdmin = ['/crm', '/admin'].includes(location.pathname.replace(/\/$/, ''));
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

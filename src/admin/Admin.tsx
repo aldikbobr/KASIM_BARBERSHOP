@@ -4,7 +4,7 @@ import { Phone, MessageCircle, LogOut, Search, RefreshCw, Plus, X, Download } fr
 import { LOCATIONS, MASTER_PHOTOS, TIME_SLOTS } from '@/data';
 import { SUPABASE_URL, SUPABASE_KEY } from '@/lib/db';
 
-// CRM открывается по адресу /admin. Библиотека Supabase грузится только здесь,
+// CRM открывается по адресу /crm. Библиотека Supabase грузится только здесь,
 // основной сайт её не тянет (см. main.tsx).
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
