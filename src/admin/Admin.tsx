@@ -509,6 +509,15 @@ function Card({ b, onUpdate }: { b: Booking; onUpdate: (b: Booking, p: Partial<B
   const [note, setNote] = useState(b.note);
   useEffect(() => setNote(b.note), [b.note]);
   const [editing, setEditing] = useState(false);
+  // окно «Пришёл»: барбер вписывает стоимость и нажимает «Завершено»
+  const [finishing, setFinishing] = useState(false);
+  const [fin, setFin] = useState({ service: '', price: '' });
+  const finish = () => {
+    const price = Math.round(Number(fin.price));
+    if (!fin.price.trim() || !price || price <= 0) return alert('Впишите стоимость услуги');
+    onUpdate(b, { status: 'done', service: fin.service.trim() || b.service, price });
+    setFinishing(false);
+  };
   const [form, setForm] = useState({ name: b.name, phone: b.phone, service: b.service, price: b.price?.toString() ?? '' });
   const startEdit = () => {
     setForm({ name: b.name, phone: b.phone, service: b.service, price: b.price?.toString() ?? '' });
@@ -600,7 +609,7 @@ function Card({ b, onUpdate }: { b: Booking; onUpdate: (b: Booking, p: Partial<B
           {NEXT[b.status].map((s) => (
             <button
               key={s}
-              onClick={() => onUpdate(b, { status: s })}
+              onClick={() => (s === 'done' ? setFinishing(true) : onUpdate(b, { status: s }))}
               className={`rounded-lg border px-3 py-2 text-[14px] sm:py-1.5 ${STATUS[s].cls} hover:brightness-125 ${
                 s === 'done' || s === 'no_show' ? 'flex-1 font-medium sm:flex-none' : ''
               }`}
@@ -610,6 +619,44 @@ function Card({ b, onUpdate }: { b: Booking; onUpdate: (b: Booking, p: Partial<B
           ))}
         </div>
       </div>
+
+      {finishing && (
+        <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-emerald-400/40 bg-emerald-400/5 p-3 sm:gap-3">
+          <div className="col-span-2 text-[14px] text-emerald-200">Клиент пришёл. Впишите, сколько стоила услуга:</div>
+          <label className="text-[12px] text-[var(--muted)]">
+            Стоимость, ₸
+            <input
+              inputMode="numeric"
+              autoFocus
+              value={fin.price}
+              onChange={(e) => setFin({ ...fin, price: e.target.value.replace(/\D/g, '') })}
+              placeholder="5000"
+              className="mt-1 w-full rounded-lg border border-[var(--border)] bg-black/40 px-3 py-2 text-[16px] focus:border-[var(--gold)] focus:outline-none sm:text-[14px]"
+            />
+          </label>
+          <label className="text-[12px] text-[var(--muted)]">
+            Услуга
+            <input
+              value={fin.service}
+              maxLength={80}
+              onChange={(e) => setFin({ ...fin, service: e.target.value })}
+              placeholder={b.service || 'стрижка, борода…'}
+              className="mt-1 w-full rounded-lg border border-[var(--border)] bg-black/40 px-3 py-2 text-[16px] focus:border-[var(--gold)] focus:outline-none sm:text-[14px]"
+            />
+          </label>
+          <div className="col-span-2 flex gap-2">
+            <button onClick={finish} className="btn btn-gold !h-10 !px-5">
+              Завершено
+            </button>
+            <button onClick={() => setFinishing(false)} className="btn btn-ghost !h-10 !px-5">
+              Отмена
+            </button>
+          </div>
+        </div>
+      )}
+      {b.status === 'done' && b.price === null && !finishing && (
+        <div className="mt-3 text-[13px] text-amber-300">Стоимость не указана — она не попадёт в статистику. Нажмите «Изменить» и впишите её.</div>
+      )}
 
       <input
         value={note}
@@ -1252,7 +1299,9 @@ const ru = (s: string) => s.split('-').reverse().join('.');
 function Stats() {
   const [from, setFrom] = useState(dayOffset(-29));
   const [to, setTo] = useState(dayOffset(0));
-  const [rows, setRows] = useState<StatRow[]>([]);
+  const [allRows, setRows] = useState<StatRow[]>([]);
+  const [fBranch, setFBranch] = useState('all'); // фильтр филиала
+  const [fMaster, setFMaster] = useState(''); // фильтр мастера, '' — все
 
   useEffect(() => {
     if (!from || !to) return;
@@ -1260,6 +1309,10 @@ function Stats() {
       .rpc('crm_stats', { p_from: from, p_to: to })
       .then(({ data }) => setRows(((data ?? []) as StatRow[]).map((r) => ({ ...r, n: Number(r.n), amount: Number(r.amount) }))));
   }, [from, to]);
+
+  // Отчёт по выбранному филиалу и мастеру; таблицы «по филиалам» и «по мастерам» тоже учитывают фильтр
+  const rows = allRows.filter((r) => (fBranch === 'all' || r.location === fBranch) && (!fMaster || r.barber === fMaster));
+  const masterList = [...new Set(allRows.filter((r) => fBranch === 'all' || r.location === fBranch).map((r) => r.barber))].sort();
 
   const sum = (f: (r: StatRow) => boolean) => rows.filter(f).reduce((a, r) => a + r.n, 0);
   const total = sum(() => true);
@@ -1357,7 +1410,27 @@ function Stats() {
           <Download size={16} /> Скачать (Excel)
         </button>
       </div>
-      <p className="mt-2 text-[13px] text-[var(--muted)]">Считаются записи на даты с {ru(from)} по {ru(to)} включительно.</p>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {['all', ...LOCATIONS.map((l) => l.name)].map((b) => (
+          <button
+            key={b}
+            onClick={() => {
+              setFBranch(b);
+              setFMaster('');
+            }}
+            className={chip(fBranch === b)}
+          >
+            {b === 'all' ? 'Все филиалы' : b}
+          </button>
+        ))}
+        <select value={fMaster} onChange={(e) => setFMaster(e.target.value)} aria-label="Мастер" className="rounded-xl border border-[var(--border)] bg-black/40 px-3 py-2 text-[16px] sm:text-[14px]">
+          <option value="">Все мастера</option>
+          {masterList.map((m) => (
+            <option key={m}>{m}</option>
+          ))}
+        </select>
+      </div>
+      <p className="mt-2 text-[13px] text-[var(--muted)]">Считаются записи на даты с {ru(from)} по {ru(to)} включительно. Сумма — только по записям «Пришёл» с указанной стоимостью.</p>
 
       <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:gap-3 md:grid-cols-5">
         {(
@@ -1497,7 +1570,7 @@ function Help() {
     ['Ошиблись кнопкой', 'Нажмите «Вернуть» — запись снова станет ожидающей.'],
     ['Заметки', 'В строке под заявкой можно написать что угодно: пожелания клиента, предоплата и т. п. Сохраняется само, когда вы нажмёте в другое место.'],
     ['Статистика', 'Выберите период кнопками или поставьте свои даты «с … по …». Один день — поставьте одинаковые даты. Сумма считается по записям со статусом «Пришёл» и стоимостью, которую вписали в карточке. «Скачать (Excel)» сохраняет цифры файлом.'],
-    ['Услуга и стоимость', 'В карточке записи нажмите «Изменить»: можно исправить имя, телефон, услугу и стоимость. Стоимость нужна, чтобы считались суммы в статистике.'],
+    ['Услуга и стоимость', 'Клиент пришёл — нажмите «Пришёл». Откроется окно: впишите стоимость услуги (и при желании услугу) и нажмите «Завершено». Только после этого запись попадает в статистику. Исправить можно кнопкой «Изменить».'],
     ['Закрыть день или время', 'В расписании нажмите «Закрыть день или время»: выберите мастера, весь день (выходной) или несколько часов (перерыв). Закрытое время сразу недоступно и на сайте, и в CRM. Снять закрытие можно корзиной у строки «Закрыто».'],
     ['Поиск', 'Найти клиента по имени или номеру телефона можно в строке поиска на вкладке «Заявки» — ищет по всем датам.'],
     ['Вход', 'На экране входа выберите свой филиал и введите пароль. Вы видите только записи своего филиала. Касым («Владелец») видит все.'],
