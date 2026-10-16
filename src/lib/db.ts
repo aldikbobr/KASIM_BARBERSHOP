@@ -13,6 +13,8 @@ export interface NewBooking {
   time: string; // HH:MM
   name: string;
   phone: string;
+  service: string;
+  duration: number; // минуты, 30 / 60 / 120
 }
 
 // Сайт работает без библиотеки Supabase: два простых запроса к REST API.

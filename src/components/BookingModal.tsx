@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, Check, ChevronLeft, ChevronRight, Calendar, Clock, User, MessageCircle } from 'lucide-react';
+import { X, Check, ChevronLeft, ChevronRight, Calendar, Clock, User, MessageCircle, Scissors } from 'lucide-react';
 import { LOCATIONS, MASTER_PHOTOS, TIME_SLOTS } from '@/data';
 import { busySlots, saveBooking } from '@/lib/db';
+import { BOOKING_SERVICES, type BookingService, fitsAt } from '@/lib/services';
 
 interface BookingModalProps {
   open: boolean;
@@ -17,10 +18,14 @@ const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 const isoDate = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
+// Шаги: 0 филиал, 1 услуга, 2 мастер, 3 дата, 4 время, 5 контакты
+const LAST = 5;
+
 export default function BookingModal({ open, onClose }: BookingModalProps) {
   const [step, setStep] = useState(0);
-  const [barber, setBarber] = useState<string>('');
   const [location, setLocation] = useState<string>('');
+  const [service, setService] = useState<BookingService | null>(null);
+  const [barber, setBarber] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [calendarMonth, setCalendarMonth] = useState(new Date());
   const [time, setTime] = useState<string>('');
@@ -35,8 +40,9 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
 
   const reset = useCallback(() => {
     setStep(0);
-    setBarber('');
     setLocation('');
+    setService(null);
+    setBarber('');
     setSelectedDate(null);
     setCalendarMonth(new Date());
     setTime('');
@@ -65,7 +71,7 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
   // Занятое время подгружаем, когда клиент дошёл до выбора времени
   const dateKey = selectedDate ? isoDate(selectedDate) : '';
   useEffect(() => {
-    if (!open || step !== 3 || !location || !dateKey) return;
+    if (!open || step !== 4 || !location || !dateKey) return;
     let alive = true;
     busySlots(location, dateKey).then((b) => alive && setBusy(b));
     return () => { alive = false; };
@@ -73,14 +79,16 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
 
   if (!open) return null;
 
-  // Мастера выбранного филиала: список зависит от филиала, поэтому филиал — первый шаг
+  // Мастера выбранного филиала: список зависит от филиала
   const masters = LOCATIONS.find((l) => l.name === location)?.masters ?? [];
 
-  // Слот недоступен: у мастера уже есть запись (для «Любого» — заняты все мастера)
-  // или время сегодня уже прошло.
+  // Слот годится, если услуга помещается в него целиком: все её получасовые слоты свободны
+  // и она заканчивается до закрытия. Для «Любого» хватает одного свободного мастера.
+  const freeFor = (m: string, slot: string) =>
+    service !== null && fitsAt(slot, service.minutes, (s) => !busy[m]?.includes(s));
   const slotTaken = (slot: string) => {
-    const takenBy = (m: string) => busy[m]?.includes(slot);
-    if (barber === 'Любой' ? masters.length > 0 && masters.every(takenBy) : takenBy(barber)) return true;
+    const ok = barber === 'Любой' ? masters.some((m) => freeFor(m, slot)) : freeFor(barber, slot);
+    if (!ok) return true;
     if (selectedDate && isToday(selectedDate)) {
       const now = new Date();
       const [h, m] = slot.split(':').map(Number);
@@ -92,14 +100,23 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
   // Заявка пишется в CRM (Supabase) и дублируется клиентом в WhatsApp филиала.
   // База недоступна — не теряем клиента: показываем тот же WhatsApp.
   const handleSubmit = async () => {
-    if (!barber || !location || !selectedDate || !time || !name || !phone) return;
+    if (!barber || !location || !selectedDate || !time || !name || !phone || !service) return;
     setSaving(true);
-    const res = await saveBooking({ location, barber, date: isoDate(selectedDate), time, name: name.trim(), phone: phone.trim() });
+    const res = await saveBooking({
+      location,
+      barber,
+      date: isoDate(selectedDate),
+      time,
+      name: name.trim(),
+      phone: phone.trim(),
+      service: service.name,
+      duration: service.minutes,
+    });
     setSaving(false);
     if (res === 'taken') {
       setTime('');
       setTimeError('Это время только что заняли — выберите другое.');
-      setStep(3);
+      setStep(4);
       return;
     }
     setSaved(res === 'ok');
@@ -108,15 +125,24 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
 
   const canProceed = () => {
     if (step === 0) return location !== '';
-    if (step === 1) return barber !== '';
-    if (step === 2) return selectedDate !== null;
-    if (step === 3) return time !== '' && !slotTaken(time);
-    if (step === 4) return name.trim() !== '' && phone.replace(/\D/g, '').length >= 10;
+    if (step === 1) return service !== null;
+    if (step === 2) return barber !== '';
+    if (step === 3) return selectedDate !== null;
+    if (step === 4) return time !== '' && !slotTaken(time);
+    if (step === 5) return name.trim() !== '' && phone.replace(/\D/g, '').length >= 10;
     return false;
   };
 
   const formatDate = (d: Date) => {
     return `${d.getDate()} ${MONTHS_OF[d.getMonth()]}`;
+  };
+
+  // Время окончания услуги, например «14:00–16:00»
+  const endTime = () => {
+    if (!service) return '';
+    const [h, m] = time.split(':').map(Number);
+    const e = h * 60 + m + service.minutes;
+    return `${String(Math.floor(e / 60)).padStart(2, '0')}:${String(e % 60).padStart(2, '0')}`;
   };
 
   // Заявка уходит в WhatsApp того филиала, который выбрал клиент
@@ -127,9 +153,10 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
       'Здравствуйте! Хочу записаться.',
       '',
       `Филиал: ${loc.name}, ${loc.address}`,
+      `Услуга: ${service?.name ?? ''}`,
       `Мастер: ${barber}`,
       `Дата: ${formatDate(selectedDate)}`,
-      `Время: ${time}`,
+      `Время: ${time}–${endTime()}`,
       `Имя: ${name}`,
       `Телефон: ${phone}`,
     ].join('\n');
@@ -202,9 +229,10 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
             </p>
             <div className="mt-2 rounded-xl border border-[var(--border)] bg-black/30 px-5 py-4 text-left text-sm">
               <div className="flex gap-2"><span className="text-[var(--muted)]">Филиал:</span><span className="text-white">{location}</span></div>
+              <div className="flex gap-2"><span className="text-[var(--muted)]">Услуга:</span><span className="text-white">{service?.name}</span></div>
               <div className="flex gap-2"><span className="text-[var(--muted)]">Мастер:</span><span className="text-white">{barber}</span></div>
               <div className="flex gap-2"><span className="text-[var(--muted)]">Дата:</span><span className="text-white">{selectedDate && formatDate(selectedDate)}</span></div>
-              <div className="flex gap-2"><span className="text-[var(--muted)]">Время:</span><span className="text-white">{time}</span></div>
+              <div className="flex gap-2"><span className="text-[var(--muted)]">Время:</span><span className="text-white">{time}–{endTime()}</span></div>
             </div>
             {wa && (
               <a href={wa} target="_blank" rel="noopener" className="btn btn-gold mt-4">
@@ -217,7 +245,7 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
           <>
             {/* Progress dots */}
             <div className="flex items-center gap-1.5 px-6 pt-4">
-              {[0, 1, 2, 3, 4].map((i) => (
+              {[0, 1, 2, 3, 4, 5].map((i) => (
                 <div
                   key={i}
                   className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
@@ -229,7 +257,7 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto px-6 py-5">
-              {/* Step 0: Location — филиал первым: от него зависит список мастеров */}
+              {/* Step 0: Location — филиал первым: от него зависят мастера */}
               {step === 0 && (
                 <div className="fade-in-up">
                   <div className="eyebrow">Выберите филиал</div>
@@ -262,8 +290,45 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
                 </div>
               )}
 
-              {/* Step 1: Barber — только мастера выбранного филиала */}
+              {/* Step 1: Service — от услуги зависит, сколько времени займёт запись */}
               {step === 1 && (
+                <div className="fade-in-up">
+                  <div className="eyebrow"><Scissors size={14} /> Выберите услугу</div>
+                  <div className="divide-y divide-[var(--border)] overflow-hidden rounded-xl border border-[var(--border)]">
+                    {BOOKING_SERVICES.map((s) => {
+                      const on = service?.name === s.name;
+                      return (
+                        <button
+                          key={s.name}
+                          aria-pressed={on}
+                          onClick={() => {
+                            setService(s);
+                            // другая услуга — другое время, выбранный слот мог не подойти
+                            setTime('');
+                          }}
+                          className={`flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition-colors ${on ? 'bg-[var(--gold)]/5' : 'hover:bg-white/[0.03]'}`}
+                        >
+                          <div>
+                            <div className={`text-[15px] ${on ? 'text-white' : 'text-white/85'}`}>{s.name}</div>
+                            <div className="mt-0.5 text-[13px] text-[var(--muted)]">
+                              {s.minutes} минут · <span className="text-[var(--gold-soft)]">{s.price.toLocaleString('ru-RU')} ₸</span>
+                            </div>
+                          </div>
+                          <span
+                            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${on ? 'border-[var(--gold)] bg-[var(--gold)] text-black' : 'border-white/25'}`}
+                          >
+                            {on && <Check size={14} />}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-3 text-[12px] text-[var(--muted)]">Время в записи занимается на всю длительность услуги.</p>
+                </div>
+              )}
+
+              {/* Step 2: Barber — только мастера выбранного филиала */}
+              {step === 2 && (
                 <div className="fade-in-up">
                   <div className="eyebrow"><User size={14} /> Выберите мастера</div>
                   <div className="mb-3 text-[13px] text-[var(--muted)]">
@@ -305,8 +370,8 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
                 </div>
               )}
 
-              {/* Step 2: Date */}
-              {step === 2 && (
+              {/* Step 3: Date */}
+              {step === 3 && (
                 <div className="fade-in-up">
                   <div className="eyebrow"><Calendar size={14} /> Выберите дату</div>
                   <div className="mb-4 flex items-center justify-between">
@@ -358,10 +423,13 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
                 </div>
               )}
 
-              {/* Step 3: Time */}
-              {step === 3 && (
+              {/* Step 4: Time */}
+              {step === 4 && (
                 <div className="fade-in-up">
                   <div className="eyebrow"><Clock size={14} /> Выберите время</div>
+                  <p className="mb-3 text-[13px] text-[var(--muted)]">
+                    {service?.name}, {service?.minutes} минут. Показаны только те часы, где услуга помещается целиком.
+                  </p>
                   {timeError && <p className="mb-3 text-[14px] text-amber-300">{timeError}</p>}
                   <div className="grid grid-cols-4 gap-2">
                     {TIME_SLOTS.map((slot) => {
@@ -387,12 +455,12 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
                       );
                     })}
                   </div>
-                  <p className="mt-3 text-[12px] text-[var(--muted)]">Зачёркнутое время уже занято.</p>
+                  <p className="mt-3 text-[12px] text-[var(--muted)]">Зачёркнутое время недоступно для этой услуги.</p>
                 </div>
               )}
 
-              {/* Step 4: Contact */}
-              {step === 4 && (
+              {/* Step 5: Contact */}
+              {step === 5 && (
                 <div className="fade-in-up">
                   <div className="eyebrow">Ваши контакты</div>
                   <div className="flex flex-col gap-3">
@@ -427,9 +495,10 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
                     <div className="text-[11px] tracking-[0.12em] uppercase text-[var(--gold)]">Ваша запись</div>
                     <div className="mt-2 space-y-1 text-sm text-[var(--muted)]">
                       <div>Филиал: <span className="text-white">{location}</span></div>
+                      <div>Услуга: <span className="text-white">{service?.name}</span></div>
                       <div>Мастер: <span className="text-white">{barber}</span></div>
                       <div>Дата: <span className="text-white">{selectedDate && formatDate(selectedDate)}</span></div>
-                      <div>Время: <span className="text-white">{time}</span></div>
+                      <div>Время: <span className="text-white">{time}–{endTime()}</span></div>
                     </div>
                   </div>
                 </div>
@@ -446,13 +515,13 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
                   <ChevronLeft size={16} /> Назад
                 </button>
               )}
-              {step < 4 ? (
+              {step < LAST ? (
                 <button
                   onClick={() => canProceed() && setStep(step + 1)}
                   disabled={!canProceed()}
                   className={`btn ${canProceed() ? 'btn-gold' : 'btn-ghost opacity-40'}`}
                 >
-                  Далее <ChevronRight size={16} />
+                  {step === 1 ? 'Готово' : 'Далее'} <ChevronRight size={16} />
                 </button>
               ) : (
                 <button

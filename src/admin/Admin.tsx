@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createClient, type Session } from '@supabase/supabase-js';
 import { Phone, MessageCircle, LogOut, Search, RefreshCw, Plus, X, Download, Pencil, Ban, Trash2 } from 'lucide-react';
 import { LOCATIONS, MASTER_PHOTOS, TIME_SLOTS } from '@/data';
+import { BOOKING_SERVICES, coveredSlots, fitsAt } from '@/lib/services';
 import { SUPABASE_URL, SUPABASE_KEY } from '@/lib/db';
 
 // CRM открывается по адресу /crm. Библиотека Supabase грузится только здесь,
@@ -23,6 +24,7 @@ interface Booking {
   source: 'site' | 'admin';
   service: string;
   price: number | null;
+  duration: number; // минуты
 }
 
 interface Block {
@@ -504,6 +506,11 @@ function Bookings({ lock, newCount, onAdd }: { lock: string | null; newCount: nu
 }
 
 const money = (n: number) => `${n.toLocaleString('ru-RU')} ₸`;
+// 14:00 + 120 мин → 16:00
+const addMin = (t: string, minutes: number) => {
+  const n = Number(t.split(':')[0]) * 60 + Number(t.split(':')[1]) + minutes;
+  return `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
+};
 
 function Card({ b, onUpdate }: { b: Booking; onUpdate: (b: Booking, p: Partial<Booking>) => void }) {
   const [note, setNote] = useState(b.note);
@@ -512,6 +519,11 @@ function Card({ b, onUpdate }: { b: Booking; onUpdate: (b: Booking, p: Partial<B
   // окно «Пришёл»: барбер вписывает стоимость и нажимает «Завершено»
   const [finishing, setFinishing] = useState(false);
   const [fin, setFin] = useState({ service: '', price: '' });
+  // стоимость подставляем из прайса услуги, барбер может поправить
+  const openFinish = () => {
+    setFin({ service: '', price: String(BOOKING_SERVICES.find((s) => s.name === b.service)?.price ?? '') });
+    setFinishing(true);
+  };
   const finish = () => {
     const price = Math.round(Number(fin.price));
     if (!fin.price.trim() || !price || price <= 0) return alert('Впишите стоимость услуги');
@@ -539,7 +551,10 @@ function Card({ b, onUpdate }: { b: Booking; onUpdate: (b: Booking, p: Partial<B
       }`}
     >
       <div className="flex items-start gap-3 sm:gap-5">
-        <div className="font-display text-[22px] leading-none sm:text-[28px]">{b.time}</div>
+        <div className="shrink-0">
+          <div className="font-display text-[22px] leading-none sm:text-[28px]">{b.time}</div>
+          {b.duration > 30 && <div className="mt-1 text-[12px] text-[var(--muted)]">до {addMin(b.time, b.duration)}</div>}
+        </div>
         <div className="min-w-0 flex-1">
           <div className="truncate text-[16px] font-medium sm:text-[17px]">{b.name}</div>
           {/* телефон и стоимость всегда на виду */}
@@ -609,7 +624,7 @@ function Card({ b, onUpdate }: { b: Booking; onUpdate: (b: Booking, p: Partial<B
           {NEXT[b.status].map((s) => (
             <button
               key={s}
-              onClick={() => (s === 'done' ? setFinishing(true) : onUpdate(b, { status: s }))}
+              onClick={() => (s === 'done' ? openFinish() : onUpdate(b, { status: s }))}
               className={`rounded-lg border px-3 py-2 text-[14px] sm:py-1.5 ${STATUS[s].cls} hover:brightness-125 ${
                 s === 'done' || s === 'no_show' ? 'flex-1 font-medium sm:flex-none' : ''
               }`}
@@ -723,6 +738,13 @@ function Schedule({ lock, onAdd }: { lock: string | null; onAdd: (init: AddInit)
   // «Любой мастер» — заявки без мастера: показываем отдельной колонкой, чтобы их распределили
   const cols = [...masters, ...(rows.some((r) => r.barber === 'Любой') ? ['Любой'] : [])];
   const at = (m: string, t: string) => rows.filter((r) => r.barber === m && r.time === t);
+  // запись, которая занимает этот слот: начинается здесь или идёт с предыдущих слотов (длинная услуга)
+  const coverAt = (m: string, t: string) =>
+    rows.find((r) => {
+      const from = TIME_SLOTS.indexOf(r.time);
+      const i = TIME_SLOTS.indexOf(t);
+      return r.barber === m && i >= from && i < from + Math.ceil(r.duration / 30);
+    });
   // закрыт ли слот: весь день или этот перерыв
   const blockAt = (m: string, t: string) => blocks.find((x) => x.barber === m && (x.time === null || x.time === t));
   const dayOff = (m: string) => blocks.find((x) => x.barber === m && x.time === null);
@@ -732,7 +754,7 @@ function Schedule({ lock, onAdd }: { lock: string | null; onAdd: (init: AddInit)
     const [h, mm] = t.split(':').map(Number);
     return h * 60 + mm <= now.getHours() * 60 + now.getMinutes();
   };
-  const freeCount = (m: string) => TIME_SLOTS.filter((t) => !isPast(t) && at(m, t).length === 0 && !blockAt(m, t)).length;
+  const freeCount = (m: string) => TIME_SLOTS.filter((t) => !isPast(t) && !coverAt(m, t) && !blockAt(m, t)).length;
   // весь день показываем всегда: и утренних клиентов, и тех, у кого уже прошло время
   const slots = TIME_SLOTS;
   const deleteBlock = async (id: string) => {
@@ -844,6 +866,15 @@ function Schedule({ lock, onAdd }: { lock: string | null; onAdd: (init: AddInit)
                 <tr key={t}>
                   <th className={`sticky left-0 z-10 bg-[#0b0806] pr-1.5 text-right font-display text-[13px] font-normal sm:pr-2 sm:text-[15px] ${past ? 'text-white/25' : 'text-white/80'}`}>{t}</th>
                   {cols.map((m) => {
+                    const cov = coverAt(m, t);
+                    // продолжение длинной услуги: слот занят, но имя пишем только в первой ячейке
+                    if (cov && cov.time !== t) {
+                      return (
+                        <td key={m} className="h-9 p-0 sm:h-11">
+                          <div className={`flex h-full w-full items-center justify-center rounded-lg border text-[11px] opacity-60 ${CELL[cov.status]}`}>↓</div>
+                        </td>
+                      );
+                    }
                     const list = at(m, t);
                     if (list.length) {
                       const b = list[0];
@@ -1080,6 +1111,8 @@ function AddBooking({ init, lock, onClose, onSaved }: { init: AddInit; lock: str
   const [error, setError] = useState('');
 
   const masters = LOCATIONS.find((l) => l.name === branch)?.masters ?? [];
+  // длительность от услуги: запись занимает все свои получасовые слоты
+  const minutes = BOOKING_SERVICES.find((s) => s.name === service)?.minutes ?? 30;
   // все выбранные дни без повторов; запись создаётся на каждое выбранное время в каждый из этих дней
   const dates = [...new Set([date, ...extra].filter(Boolean))];
   const datesKey = dates.join();
@@ -1121,6 +1154,7 @@ function AddBooking({ init, lock, onClose, onSaved }: { init: AddInit; lock: str
           phone: phone.trim(),
           service: service.trim(),
           price: price.trim() === '' ? null : Number(price),
+          duration: minutes,
           note: note.trim(),
           source: 'admin',
           status: walkIn && dates.length === 1 ? 'done' : 'confirmed',
@@ -1183,15 +1217,18 @@ function AddBooking({ init, lock, onClose, onSaved }: { init: AddInit; lock: str
           </div>
 
           <div>
-            <span className={label}>Время — можно выбрать несколько</span>
+            <span className={label}>Время — можно выбрать несколько · услуга займёт {minutes} мин</span>
             <div className="mt-1.5 grid grid-cols-5 gap-1.5">
               {TIME_SLOTS.map((s) => {
-                const taken = busy.includes(s);
                 const on = times.includes(s);
+                // занято или не помещается целиком (в том числе пересекается с уже выбранным временем)
+                const taken =
+                  !fitsAt(s, minutes, (x) => !busy.includes(x)) ||
+                  times.some((x) => x !== s && coveredSlots(x, minutes).some((y) => coveredSlots(s, minutes).includes(y)));
                 return (
                   <button
                     key={s}
-                    disabled={taken}
+                    disabled={taken && !on}
                     onClick={() => setTimes(on ? times.filter((x) => x !== s) : [...times, s])}
                     className={`rounded-lg border py-1.5 text-[13px] sm:py-2 ${
                       taken
@@ -1247,7 +1284,24 @@ function AddBooking({ init, lock, onClose, onSaved }: { init: AddInit; lock: str
           <div className="grid grid-cols-2 items-end gap-3">
             <label className={label}>
               Услуга
-              <input value={service} maxLength={80} onChange={(e) => setService(e.target.value)} placeholder="стрижка, борода…" className={field} />
+              <select
+                value={service}
+                onChange={(e) => {
+                  const s = BOOKING_SERVICES.find((x) => x.name === e.target.value);
+                  setService(e.target.value);
+                  setPrice(s ? String(s.price) : '');
+                  setTimes([]);
+                }}
+                className={field}
+              >
+                <option value="">—</option>
+                {BOOKING_SERVICES.map((s) => (
+                  <option key={s.name} value={s.name}>
+                    {s.name} · {s.minutes} мин
+                  </option>
+                ))}
+                <option value="Другая">Другая · 30 мин</option>
+              </select>
             </label>
             <label className={label}>
               Стоимость, ₸
@@ -1570,6 +1624,7 @@ function Help() {
     ['Ошиблись кнопкой', 'Нажмите «Вернуть» — запись снова станет ожидающей.'],
     ['Заметки', 'В строке под заявкой можно написать что угодно: пожелания клиента, предоплата и т. п. Сохраняется само, когда вы нажмёте в другое место.'],
     ['Статистика', 'Выберите период кнопками или поставьте свои даты «с … по …». Один день — поставьте одинаковые даты. Сумма считается по записям со статусом «Пришёл» и стоимостью, которую вписали в карточке. «Скачать (Excel)» сохраняет цифры файлом.'],
+    ['Услуга и время', 'Услуга задаёт длительность: например, биозавивка — 2 часа, и в расписании закрываются все четыре получасовых слота. Клиент на сайте выбирает услугу сам, а в CRM её выбирает администратор в форме «Записать».'],
     ['Услуга и стоимость', 'Клиент пришёл — нажмите «Пришёл». Откроется окно: впишите стоимость услуги (и при желании услугу) и нажмите «Завершено». Только после этого запись попадает в статистику. Исправить можно кнопкой «Изменить».'],
     ['Закрыть день или время', 'В расписании нажмите «Закрыть день или время»: выберите мастера, весь день (выходной) или несколько часов (перерыв). Закрытое время сразу недоступно и на сайте, и в CRM. Снять закрытие можно корзиной у строки «Закрыто».'],
     ['Поиск', 'Найти клиента по имени или номеру телефона можно в строке поиска на вкладке «Заявки» — ищет по всем датам.'],
