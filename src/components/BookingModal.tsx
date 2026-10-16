@@ -310,9 +310,7 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
                         >
                           <div>
                             <div className={`text-[15px] ${on ? 'text-white' : 'text-white/85'}`}>{s.name}</div>
-                            <div className="mt-0.5 text-[13px] text-[var(--muted)]">
-                              {s.minutes} минут · <span className="text-[var(--gold-soft)]">{s.price.toLocaleString('ru-RU')} ₸</span>
-                            </div>
+                            <div className="mt-0.5 text-[13px] text-[var(--muted)]">{s.minutes} минут</div>
                           </div>
                           <span
                             className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${on ? 'border-[var(--gold)] bg-[var(--gold)] text-black' : 'border-white/25'}`}
