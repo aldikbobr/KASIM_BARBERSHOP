@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { createClient, type Session } from '@supabase/supabase-js';
 import { Phone, MessageCircle, LogOut, Search, RefreshCw, Plus, X, Download, Pencil, Ban, Trash2 } from 'lucide-react';
 import { LOCATIONS, MASTER_PHOTOS, TIME_SLOTS } from '@/data';
-import { BOOKING_SERVICES, coveredSlots, fitsAt } from '@/lib/services';
+import { BOOKING_SERVICES, coveredSlots, fitsAt, fromMin, toMin } from '@/lib/services';
 import { SUPABASE_URL, SUPABASE_KEY } from '@/lib/db';
 
 // CRM открывается по адресу /crm. Библиотека Supabase грузится только здесь,
@@ -25,7 +25,16 @@ interface Booking {
   service: string;
   price: number | null;
   duration: number; // минуты
+  payment: Payment | null;
 }
+
+type Payment = 'cash' | 'kaspi' | 'halyk' | 'card';
+const PAYMENTS: { id: Payment; label: string }[] = [
+  { id: 'cash', label: 'Наличка' },
+  { id: 'kaspi', label: 'Каспи QR' },
+  { id: 'halyk', label: 'Халык' },
+  { id: 'card', label: 'Карта' },
+];
 
 interface Block {
   id: string;
@@ -518,19 +527,20 @@ function Card({ b, onUpdate }: { b: Booking; onUpdate: (b: Booking, p: Partial<B
   const [editing, setEditing] = useState(false);
   // окно «Пришёл»: барбер вписывает стоимость и нажимает «Завершено»
   const [finishing, setFinishing] = useState(false);
-  const [fin, setFin] = useState({ service: '', price: '' });
+  const [fin, setFin] = useState<{ service: string; price: string; payment: Payment | '' }>({ service: '', price: '', payment: '' });
   // стоимость подставляем из прайса услуги, барбер может поправить
   const openFinish = () => {
-    setFin({ service: '', price: String(BOOKING_SERVICES.find((s) => s.name === b.service)?.price ?? '') });
+    setFin({ service: '', price: String(BOOKING_SERVICES.find((s) => s.name === b.service)?.price ?? ''), payment: '' });
     setFinishing(true);
   };
   const finish = () => {
     const price = Math.round(Number(fin.price));
     if (!fin.price.trim() || !price || price <= 0) return alert('Впишите стоимость услуги');
-    onUpdate(b, { status: 'done', service: fin.service.trim() || b.service, price });
+    if (!fin.payment) return alert('Выберите способ оплаты');
+    onUpdate(b, { status: 'done', service: fin.service.trim() || b.service, price, payment: fin.payment });
     setFinishing(false);
   };
-  const [form, setForm] = useState({ name: b.name, phone: b.phone, service: b.service, price: b.price?.toString() ?? '' });
+  const [form, setForm] = useState({ name: b.name, phone: b.phone, service: b.service, price: b.price?.toString() ?? '', payment: (b.payment ?? '') as Payment | '' });
   const startEdit = () => {
     setForm({ name: b.name, phone: b.phone, service: b.service, price: b.price?.toString() ?? '' });
     setEditing(true);
@@ -539,7 +549,7 @@ function Card({ b, onUpdate }: { b: Booking; onUpdate: (b: Booking, p: Partial<B
     const price = form.price.trim() === '' ? null : Math.max(0, Math.round(Number(form.price)));
     if (price !== null && Number.isNaN(price)) return alert('Стоимость — число, например 5000');
     if (!form.name.trim()) return alert('Укажите имя клиента');
-    onUpdate(b, { name: form.name.trim(), phone: form.phone.trim(), service: form.service.trim(), price });
+    onUpdate(b, { name: form.name.trim(), phone: form.phone.trim(), service: form.service.trim(), price, payment: form.payment || null });
     setEditing(false);
   };
   const input = 'mt-1 w-full rounded-lg border border-[var(--border)] bg-black/40 px-3 py-2 text-[16px] focus:border-[var(--gold)] focus:outline-none sm:text-[14px]';
@@ -593,6 +603,17 @@ function Card({ b, onUpdate }: { b: Booking; onUpdate: (b: Booking, p: Partial<B
           <label className="col-span-2 text-[12px] text-[var(--muted)]">
             Услуга
             <input value={form.service} maxLength={80} onChange={(e) => setForm({ ...form, service: e.target.value })} placeholder="стрижка, борода…" className={input} />
+          </label>
+          <label className="col-span-2 text-[12px] text-[var(--muted)]">
+            Оплата
+            <select value={form.payment} onChange={(e) => setForm({ ...form, payment: e.target.value as Payment | '' })} className={input}>
+              <option value="">не указана</option>
+              {PAYMENTS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
           </label>
           <div className="col-span-2 flex gap-2">
             <button onClick={saveEdit} className="btn btn-gold !h-10 !px-5">Сохранить</button>
@@ -659,6 +680,24 @@ function Card({ b, onUpdate }: { b: Booking; onUpdate: (b: Booking, p: Partial<B
               className="mt-1 w-full rounded-lg border border-[var(--border)] bg-black/40 px-3 py-2 text-[16px] focus:border-[var(--gold)] focus:outline-none sm:text-[14px]"
             />
           </label>
+          <div className="col-span-2">
+            <div className="mb-1.5 text-[12px] text-[var(--muted)]">Оплата</div>
+            <div className="flex flex-wrap gap-2">
+              {PAYMENTS.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setFin({ ...fin, payment: p.id })}
+                  aria-pressed={fin.payment === p.id}
+                  className={`rounded-lg border px-3 py-2 text-[14px] ${
+                    fin.payment === p.id ? 'border-emerald-300 bg-emerald-400/20 text-white' : 'border-[var(--border)] text-[var(--muted)] hover:text-white'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="col-span-2 flex gap-2">
             <button onClick={finish} className="btn btn-gold !h-10 !px-5">
               Завершено
@@ -752,8 +791,23 @@ function Schedule({ lock, onAdd }: { lock: string | null; onAdd: (init: AddInit)
     if (date < dayOffset(0)) return true;
     if (date > dayOffset(0)) return false;
     const [h, mm] = t.split(':').map(Number);
-    return h * 60 + mm <= now.getHours() * 60 + now.getMinutes();
+    return h * 60 + mm < now.getHours() * 60 + now.getMinutes();
   };
+  // Красная линия «сейчас»: ставится на начало ближайшего предстоящего получаса.
+  // Так барберы без часов видят, что уже прошло, а что ещё впереди.
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const showNow = date === dayOffset(0);
+  const nowIdx = TIME_SLOTS.findIndex((t) => toMin(t) >= nowMin);
+  const nowAt = nowIdx === -1 ? TIME_SLOTS.length : nowIdx;
+  const nowLine = (
+    <tr>
+      <td colSpan={cols.length + 1} className="p-0">
+        <div className="relative h-0.5 bg-red-500">
+          <span className="absolute -top-2.5 left-0 rounded bg-red-500 px-1.5 text-[10px] text-white">сейчас {fromMin(nowMin)}</span>
+        </div>
+      </td>
+    </tr>
+  );
   const freeCount = (m: string) => TIME_SLOTS.filter((t) => !isPast(t) && !coverAt(m, t) && !blockAt(m, t)).length;
   // весь день показываем всегда: и утренних клиентов, и тех, у кого уже прошло время
   const slots = TIME_SLOTS;
@@ -860,10 +914,12 @@ function Schedule({ lock, onAdd }: { lock: string | null; onAdd: (init: AddInit)
             </tr>
           </thead>
           <tbody>
-            {slots.map((t) => {
+            {slots.map((t, i) => {
               const past = isPast(t);
               return (
-                <tr key={t}>
+                <Fragment key={t}>
+                {showNow && i === nowAt && nowLine}
+                <tr>
                   <th className={`sticky left-0 z-10 bg-[#0b0806] pr-1.5 text-right font-display text-[13px] font-normal sm:pr-2 sm:text-[15px] ${past ? 'text-white/25' : 'text-white/80'}`}>{t}</th>
                   {cols.map((m) => {
                     const cov = coverAt(m, t);
@@ -920,8 +976,10 @@ function Schedule({ lock, onAdd }: { lock: string | null; onAdd: (init: AddInit)
                     );
                   })}
                 </tr>
+                </Fragment>
               );
             })}
+            {showNow && nowAt === TIME_SLOTS.length && nowLine}
           </tbody>
         </table>
         {slots.length === 0 && <p className="mt-4 text-center text-[var(--muted)]">В этот день записей не было</p>}
@@ -1341,11 +1399,12 @@ interface StatRow {
   location: string;
   barber: string;
   status: Status;
+  payment: Payment | null;
   n: number;
   amount: number;
 }
 
-type Agg = { total: number; done: number; noShow: number; cancelled: number; amount: number };
+type Agg = { total: number; done: number; noShow: number; cancelled: number; amount: number; net: number };
 
 // 2026-10-05 → 05.10.2026
 const ru = (s: string) => s.split('-').reverse().join('.');
@@ -1356,6 +1415,9 @@ function Stats() {
   const [allRows, setRows] = useState<StatRow[]>([]);
   const [fBranch, setFBranch] = useState('all'); // фильтр филиала
   const [fMaster, setFMaster] = useState(''); // фильтр мастера, '' — все
+  const [fPay, setFPay] = useState<Payment | ''>(''); // фильтр способа оплаты, '' — все
+  const [rates, setRates] = useState<Record<string, number>>({}); // комиссии: 0.0095 = 0,95%
+  const [pct, setPct] = useState<Record<string, string>>({}); // то, что набрано в полях комиссий
 
   useEffect(() => {
     if (!from || !to) return;
@@ -1364,8 +1426,37 @@ function Stats() {
       .then(({ data }) => setRows(((data ?? []) as StatRow[]).map((r) => ({ ...r, n: Number(r.n), amount: Number(r.amount) }))));
   }, [from, to]);
 
-  // Отчёт по выбранному филиалу и мастеру; таблицы «по филиалам» и «по мастерам» тоже учитывают фильтр
-  const rows = allRows.filter((r) => (fBranch === 'all' || r.location === fBranch) && (!fMaster || r.barber === fMaster));
+  useEffect(() => {
+    supabase
+      .from('payment_rates')
+      .select('method, rate')
+      .then(({ data }) => {
+        const r: Record<string, number> = {};
+        const p: Record<string, string> = {};
+        for (const x of (data ?? []) as { method: string; rate: number | string }[]) {
+          r[x.method] = Number(x.rate);
+          p[x.method] = String(+(Number(x.rate) * 100).toFixed(2));
+        }
+        setRates(r);
+        setPct(p);
+      });
+  }, []);
+
+  const saveRate = async (method: string) => {
+    const r = Number((pct[method] ?? '').replace(',', '.')) / 100;
+    if (!(r >= 0 && r < 0.5)) return alert('Комиссия — число от 0 до 50, например 0,95');
+    const { error } = await supabase.from('payment_rates').update({ rate: r }).eq('method', method);
+    if (error) return alert('Не сохранилось, попробуйте ещё раз');
+    setRates((x) => ({ ...x, [method]: r }));
+  };
+
+  // Отчёт по выбранному филиалу, мастеру и способу оплаты; таблицы тоже учитывают фильтры
+  const rows = allRows.filter(
+    (r) => (fBranch === 'all' || r.location === fBranch) && (!fMaster || r.barber === fMaster) && (!fPay || r.payment === fPay)
+  );
+  const rateOf = (p: Payment | null) => (p ? rates[p] ?? 0 : 0);
+  // сумма на руки: из стоимости вычитается комиссия банка способа оплаты
+  const netOf = (r: StatRow) => Math.round(r.amount * (1 - rateOf(r.payment)));
   const masterList = [...new Set(allRows.filter((r) => fBranch === 'all' || r.location === fBranch).map((r) => r.barber))].sort();
 
   const sum = (f: (r: StatRow) => boolean) => rows.filter(f).reduce((a, r) => a + r.n, 0);
@@ -1377,17 +1468,21 @@ function Stats() {
   const noShowRate = done + noShow ? Math.round((noShow / (done + noShow)) * 100) : 0;
 
   const amountSum = rows.reduce((a, r) => a + r.amount, 0);
+  const netSum = rows.reduce((a, r) => a + netOf(r), 0);
+  const feeSum = amountSum - netSum;
 
-  const by = (key: 'location' | 'barber') => {
+  const by = (key: 'location' | 'barber' | 'payment') => {
     const m = new Map<string, Agg>();
     for (const r of rows) {
-      const v = m.get(r[key]) ?? { total: 0, done: 0, noShow: 0, cancelled: 0, amount: 0 };
+      const k = r[key] ?? 'none';
+      const v = m.get(k) ?? { total: 0, done: 0, noShow: 0, cancelled: 0, amount: 0, net: 0 };
       v.total += r.n;
       v.amount += r.amount;
+      v.net += netOf(r);
       if (r.status === 'done') v.done += r.n;
       if (r.status === 'no_show') v.noShow += r.n;
       if (r.status === 'cancelled') v.cancelled += r.n;
-      m.set(r[key], v);
+      m.set(k, v);
     }
     return [...m.entries()].sort((a, b) => b[1].total - a[1].total);
   };
@@ -1395,8 +1490,8 @@ function Stats() {
   // CSV с «;» и BOM — так его правильно открывает русский Excel
   const download = () => {
     const table = (title: string, items: ReturnType<typeof by>) => [
-      [title, 'Всего', 'Пришли', 'Не пришли', 'Отменены', 'Сумма, ₸'],
-      ...items.map(([n, v]) => [n, v.total, v.done, v.noShow, v.cancelled, v.amount]),
+      [title, 'Всего', 'Пришли', 'Не пришли', 'Отменены', 'Сумма, ₸', 'На руки, ₸'],
+      ...items.map(([n, v]) => [n === 'none' ? 'не указана' : n, v.total, v.done, v.noShow, v.cancelled, v.amount, v.net]),
       [],
     ];
     const lines: (string | number)[][] = [
@@ -1409,9 +1504,12 @@ function Stats() {
       ['Отменены', cancelled],
       ['Ждут визита', waiting],
       ['Сумма за услуги, ₸', amountSum],
+      ['Комиссия банков, ₸', feeSum],
+      ['На руки, ₸', netSum],
       [],
       ...table('Филиал', by('location')),
       ...table('Мастер', by('barber')),
+      ...table('Оплата', by('payment')),
     ];
     const csv = '﻿' + lines.map((l) => l.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\r\n');
     const a = document.createElement('a');
@@ -1484,6 +1582,13 @@ function Stats() {
           ))}
         </select>
       </div>
+      <div className="no-sb -mx-4 mt-2 flex gap-2 overflow-x-auto px-4 sm:flex-wrap">
+        {(['', ...PAYMENTS.map((p) => p.id)] as const).map((p) => (
+          <button key={p || 'all'} onClick={() => setFPay(p)} className={chip(fPay === p)}>
+            {p ? PAYMENTS.find((x) => x.id === p)?.label : 'Любая оплата'}
+          </button>
+        ))}
+      </div>
       <p className="mt-2 text-[13px] text-[var(--muted)]">Считаются записи на даты с {ru(from)} по {ru(to)} включительно. Сумма — только по записям «Пришёл» с указанной стоимостью.</p>
 
       <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:gap-3 md:grid-cols-5">
@@ -1495,6 +1600,8 @@ function Stats() {
             ['Отменены', cancelled, 'text-white/60'],
             ['Ждут визита', waiting, 'text-amber-300'],
             ['Сумма за услуги', money(amountSum), 'text-[var(--gold-soft)]'],
+            ['Комиссия банков', money(feeSum), 'text-white/60'],
+            ['На руки', money(netSum), 'text-emerald-300'],
           ] as const
         ).map(([label, value, cls]) => (
           <div key={label} className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3 sm:p-4">
@@ -1507,12 +1614,38 @@ function Stats() {
       <div className="mt-4 grid gap-3 sm:mt-6 sm:gap-4 md:grid-cols-2">
         <StatTable title="По филиалам" items={by('location')} />
         <StatTable title="По мастерам" items={by('barber')} />
+        <StatTable title="По способу оплаты" items={by('payment')} />
+
+        {/* Комиссии банков: меняются здесь, и пересчитывается сумма на руки */}
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 sm:p-5">
+          <h3 className="mb-3 text-[12px] tracking-[0.16em] uppercase text-[var(--gold)]">Комиссии банков, %</h3>
+          <div className="flex flex-col gap-2">
+            {PAYMENTS.filter((p) => p.id !== 'cash').map((p) => (
+              <div key={p.id} className="flex items-center gap-2 text-[14px]">
+                <span className="flex-1">{p.label}</span>
+                <input
+                  inputMode="decimal"
+                  value={pct[p.id] ?? ''}
+                  onChange={(e) => setPct({ ...pct, [p.id]: e.target.value })}
+                  aria-label={`Комиссия ${p.label}`}
+                  className="w-24 rounded-lg border border-[var(--border)] bg-black/40 px-3 py-1.5 text-right text-[16px] sm:text-[14px]"
+                />
+                <span className="text-[var(--muted)]">%</span>
+                <button onClick={() => saveRate(p.id)} className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-[13px] text-[var(--muted)] hover:text-white">
+                  Сохранить
+                </button>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-[12px] text-[var(--muted)]">Наличка без комиссии. Новая ставка действует на отчёты с этого момента, прошлые суммы пересчитываются по ней же.</p>
+        </div>
       </div>
     </div>
   );
 }
 
 function StatTable({ title, items }: { title: string; items: [string, Agg][] }) {
+  const label = (k: string) => (k === 'none' ? 'не указана' : (PAYMENTS.find((p) => p.id === k)?.label ?? k));
   const max = Math.max(1, ...items.map(([, v]) => v.total));
   return (
     <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 sm:p-5">
@@ -1527,6 +1660,7 @@ function StatTable({ title, items }: { title: string; items: [string, Agg][] }) 
                 {v.total} · <span className="text-emerald-300">{v.done} пришли</span>
                 {v.noShow > 0 && <span className="text-rose-300"> · {v.noShow} нет</span>}
                 {v.amount > 0 && <span className="text-[var(--gold-soft)]"> · {money(v.amount)}</span>}
+                {v.amount > 0 && <span className="text-emerald-300"> · на руки {money(v.net)}</span>}
               </span>
             </div>
             <div className="mt-1 h-1.5 rounded-full bg-white/5">
