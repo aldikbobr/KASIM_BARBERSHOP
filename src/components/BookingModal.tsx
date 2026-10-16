@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, Check, ChevronLeft, ChevronRight, Calendar, Clock, User, MessageCircle, Scissors } from 'lucide-react';
 import { LOCATIONS, MASTER_PHOTOS, TIME_SLOTS } from '@/data';
-import { busySlots, saveBooking } from '@/lib/db';
+import { busySlots, saveBooking, CRM_LINK } from '@/lib/db';
 import { BOOKING_SERVICES, type BookingService, fitsAt } from '@/lib/services';
 
 interface BookingModalProps {
@@ -71,7 +71,7 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
   // Занятое время подгружаем, когда клиент дошёл до выбора времени
   const dateKey = selectedDate ? isoDate(selectedDate) : '';
   useEffect(() => {
-    if (!open || step !== 4 || !location || !dateKey) return;
+    if (!CRM_LINK || !open || step !== 4 || !location || !dateKey) return;
     let alive = true;
     busySlots(location, dateKey).then((b) => alive && setBusy(b));
     return () => { alive = false; };
@@ -101,6 +101,15 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
   // База недоступна — не теряем клиента: показываем тот же WhatsApp.
   const handleSubmit = async () => {
     if (!barber || !location || !selectedDate || !time || !name || !phone || !service) return;
+    // Без связи с CRM: сразу открываем WhatsApp филиала с готовым текстом, до любых ожиданий —
+    // иначе браузер может заблокировать окно. Экран подтверждения остаётся запасным вариантом.
+    if (!CRM_LINK) {
+      const link = waLink();
+      if (link) window.open(link, '_blank', 'noopener');
+      setSaved(false);
+      setSuccess(true);
+      return;
+    }
     setSaving(true);
     const res = await saveBooking({
       location,
@@ -221,11 +230,15 @@ export default function BookingModal({ open, onClose }: BookingModalProps) {
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--gold)]/10">
               <MessageCircle size={32} className="text-[var(--gold)]" />
             </div>
-            <h3 className="font-display text-2xl font-medium uppercase">{saved ? 'Заявка принята' : 'Остался один шаг'}</h3>
+            <h3 className="font-display text-2xl font-medium uppercase">
+              {!CRM_LINK ? 'Откройте WhatsApp' : saved ? 'Заявка принята' : 'Остался один шаг'}
+            </h3>
             <p className="max-w-sm text-[15px] leading-relaxed text-[var(--muted)]">
-              {saved
-                ? 'Время за вами. Администратор свяжется для подтверждения — а быстрее всего написать в WhatsApp филиала, текст уже готов.'
-                : 'Нажмите кнопку — откроется WhatsApp филиала с готовым текстом. Отправьте его, и администратор подтвердит запись.'}
+              {!CRM_LINK
+                ? 'WhatsApp филиала открылся с готовым сообщением — нажмите там «Отправить», и администратор подтвердит запись. Если он не открылся, нажмите кнопку ниже.'
+                : saved
+                  ? 'Время за вами. Администратор свяжется для подтверждения — а быстрее всего написать в WhatsApp филиала, текст уже готов.'
+                  : 'Нажмите кнопку — откроется WhatsApp филиала с готовым текстом. Отправьте его, и администратор подтвердит запись.'}
             </p>
             <div className="mt-2 rounded-xl border border-[var(--border)] bg-black/30 px-5 py-4 text-left text-sm">
               <div className="flex gap-2"><span className="text-[var(--muted)]">Филиал:</span><span className="text-white">{location}</span></div>
