@@ -364,7 +364,9 @@ function Bookings({ lock, newCount, onAdd }: { lock: string | null; newCount: nu
     const s = search.replace(/[,()%*]/g, '').trim();
     let q = supabase.from('bookings').select('*');
     if (s) {
-      q = q.or(`name.ilike.%${s}%,phone.ilike.%${s}%`);
+      // по номеру ищем цифры: «775 27», «87752…» и «+7 775…» дают одного клиента
+      const key = phoneKeyOf(s);
+      q = key ? q.or(`name.ilike.%${s}%,phone_digits.like.%${key}%`) : q.or(`name.ilike.%${s}%`);
     } else if (view === 'today') q = q.eq('date', dayOffset(0));
     else if (view === 'tomorrow') q = q.eq('date', dayOffset(1));
     else if (view === 'week') q = q.gte('date', dayOffset(0)).lte('date', dayOffset(6));
@@ -442,7 +444,7 @@ function Bookings({ lock, newCount, onAdd }: { lock: string | null; newCount: nu
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Поиск по имени или телефону"
+            placeholder="Имя или часть номера телефона"
             className="w-full bg-transparent text-[16px] focus:outline-none sm:text-[14px]"
           />
         </label>
@@ -470,6 +472,8 @@ function Bookings({ lock, newCount, onAdd }: { lock: string | null; newCount: nu
           <Plus size={16} /> Записать
         </button>
       </div>
+
+      {phoneKeyOf(search) && <ClientHistory rows={rows} phoneKey={phoneKeyOf(search)} />}
 
       <div className="no-sb -mx-4 mt-3 flex gap-2 overflow-x-auto px-4" role="tablist" aria-label="Мастера">
         {['', ...masterTabs].map((m) => {
@@ -515,6 +519,53 @@ function Bookings({ lock, newCount, onAdd }: { lock: string | null; newCount: nu
 }
 
 const money = (n: number) => `${n.toLocaleString('ru-RU')} ₸`;
+
+// Ключ для поиска по телефону: последние 10 цифр (без 8/+7). Меньше 4 цифр — не номер, ищем по имени.
+const phoneKeyOf = (s: string) => {
+  const d = s.replace(/\D/g, '');
+  if (d.length < 4) return '';
+  return d.length >= 10 ? d.slice(-10) : d;
+};
+
+// История клиента: всё, что есть по найденному номеру — сколько раз приходил, суммы, последний визит.
+// Заметки видны в самих записях ниже и редактируются там же.
+function ClientHistory({ rows, phoneKey }: { rows: Booking[]; phoneKey: string }) {
+  const mine = rows.filter((r) => r.phone.replace(/\D/g, '').slice(-10).includes(phoneKey));
+  if (mine.length === 0) {
+    return phoneKey.length >= 10 ? (
+      <div className="mt-4 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 text-[14px] text-[var(--muted)]">
+        С этим номером записей нет. Новый клиент.
+      </div>
+    ) : null;
+  }
+  const visits = mine.filter((r) => r.status === 'done');
+  const noShow = mine.filter((r) => r.status === 'no_show').length;
+  const cancelled = mine.filter((r) => r.status === 'cancelled').length;
+  const spent = visits.reduce((a, r) => a + (r.price ?? 0), 0);
+  const last = visits.map((r) => r.date).sort().at(-1);
+  const names = [...new Set(mine.map((r) => r.name))].join(', ');
+  const phones = [...new Set(mine.map((r) => r.phone))].join(', ');
+  const cell = (label: string, value: string, cls = '') => (
+    <div className="rounded-xl border border-[var(--border)] bg-black/20 px-3 py-2">
+      <div className="text-[12px] text-[var(--muted)]">{label}</div>
+      <div className={`font-display text-[20px] ${cls}`}>{value}</div>
+    </div>
+  );
+  return (
+    <div className="mt-4 rounded-2xl border border-[var(--gold)]/30 bg-[var(--card)] p-4 sm:p-5">
+      <div className="text-[12px] tracking-[0.14em] uppercase text-[var(--gold)]">История клиента</div>
+      <div className="mt-1 text-[16px] font-medium">{names}</div>
+      <div className="text-[14px] text-[var(--muted)]">{phones}</div>
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+        {cell('Приходил', String(visits.length), 'text-emerald-300')}
+        {cell('Не пришёл', String(noShow), noShow ? 'text-rose-300' : '')}
+        {cell('Отменил', String(cancelled), 'text-white/60')}
+        {cell('Сумма', money(spent), 'text-[var(--gold-soft)]')}
+        {cell('Последний визит', last ? ru(last) : 'нет', '')}
+      </div>
+    </div>
+  );
+}
 // 14:00 + 120 мин → 16:00
 const addMin = (t: string, minutes: number) => {
   const n = Number(t.split(':')[0]) * 60 + Number(t.split(':')[1]) + minutes;
@@ -1761,7 +1812,7 @@ function Help() {
     ['Услуга и время', 'Услуга задаёт длительность: например, биозавивка — 2 часа, и в расписании закрываются все четыре получасовых слота. Клиент на сайте выбирает услугу сам, а в CRM её выбирает администратор в форме «Записать».'],
     ['Услуга и стоимость', 'Клиент пришёл — нажмите «Пришёл». Откроется окно: впишите стоимость услуги (и при желании услугу) и нажмите «Завершено». Только после этого запись попадает в статистику. Исправить можно кнопкой «Изменить».'],
     ['Закрыть день или время', 'В расписании нажмите «Закрыть день или время»: выберите мастера, весь день (выходной) или несколько часов (перерыв). Закрытое время сразу недоступно и на сайте, и в CRM. Снять закрытие можно корзиной у строки «Закрыто».'],
-    ['Поиск', 'Найти клиента по имени или номеру телефона можно в строке поиска на вкладке «Заявки» — ищет по всем датам.'],
+    ['Поиск', 'Найти клиента по имени или номеру телефона можно в строке поиска на вкладке «Заявки» — ищет по всем датам. Номер можно вводить с плюсом, восьмёркой или по частям. Вверху появится «История клиента»: сколько раз приходил, сумма, последний визит. Ниже — все его записи с заметками.'],
     ['Вход', 'На экране входа выберите свой филиал и введите пароль. Вы видите только записи своего филиала. Касым («Владелец») видит все.'],
     ['Забыли пароль', 'Новый пароль администратора филиала задаёт только Касым: он входит как «Владелец» и открывает вкладку «Пароли». После смены администратор выходит из CRM и входит с новым паролем.'],
   ];
